@@ -3,10 +3,11 @@
 import { useState, Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
+import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import { motion, AnimatePresence } from 'framer-motion'
 import { STONE_CONFIGS } from '@/lib/materials'
 import { useConfigStore } from '@/lib/store'
-import { StoneThumb, StoneGeometry } from '@/components/three/StoneThumb'
+import { StoneThumb, StoneGeometry, DarkBackground } from '@/components/three/StoneThumb'
 import { LightTentEnvironment } from '@/components/three/LightTentEnvironment'
 
 const SHAPES_3D   = ['round', 'oval', 'princess', 'cushion', 'marquise', 'pear'] as const
@@ -49,13 +50,17 @@ function StonePreview({ shape, y }: { shape: string; y: number }) {
       <div style={{ width: '100%', height: 180, background: 'transparent' }}>
         <Canvas
           camera={{ position: [0, 0.3, 2.4], fov: 40 }}
-          gl={{ antialias: true, alpha: false, toneMapping: 4 }}
+          gl={{ antialias: true, alpha: true, toneMapping: 4 }}
           dpr={[1, 2]}
         >
           <Suspense fallback={null}>
-            <LightTentEnvironment />
-            <spotLight position={[2, 4, 2]} intensity={2.0} angle={0.4} penumbra={0.7} />
-            <ambientLight intensity={0.08} />
+            <LightTentEnvironment transparent={false} />
+            <DarkBackground />
+            <spotLight position={[2, 5, 2.5]} intensity={14} angle={0.13} penumbra={0.04} color="#ffffff" />
+            <spotLight position={[-2.5, 3.5, 1.5]} intensity={10} angle={0.16} penumbra={0.06} color="#ffffff" />
+            <spotLight position={[0.3, 7, 0.5]} intensity={12} angle={0.11} penumbra={0.03} color="#ffffff" />
+            <spotLight position={[0, 1, 4]} intensity={8} angle={0.18} penumbra={0.06} color="#ffffff" />
+            <ambientLight intensity={0.03} />
             <StoneGeometry shape={shape as any} />
             <OrbitControls
               enableZoom={false}
@@ -63,6 +68,9 @@ function StonePreview({ shape, y }: { shape: string; y: number }) {
               autoRotate
               autoRotateSpeed={6}
             />
+            <EffectComposer>
+              <Bloom luminanceThreshold={0.8} luminanceSmoothing={0.05} intensity={0.6} mipmapBlur />
+            </EffectComposer>
           </Suspense>
         </Canvas>
       </div>
