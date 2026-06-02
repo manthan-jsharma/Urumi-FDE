@@ -7,7 +7,6 @@
 
 import { useRef, useEffect, Suspense, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { ContactShadows } from '@react-three/drei'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { RingMesh } from '@/components/three/RingMesh'
@@ -114,7 +113,7 @@ export function FinalCTA() {
         <Canvas
           camera={{ position: [0, 0.2, 2.6], fov: 40 }}
           gl={{ antialias: true, alpha: false, toneMapping: 4, toneMappingExposure: 1.4 }}
-          dpr={[1, 1.5]}
+          dpr={[1, 1.2]}
           frameloop={inView ? 'always' : 'demand'}
         >
           <color attach="background" args={['#0a0a0a']} />
@@ -133,7 +132,6 @@ export function FinalCTA() {
               stoneEnvIntensity={7}
               stoneTransmission={0.82}
             />
-            <ContactShadows position={[0, -1.0, 0]} opacity={0.45} blur={2} scale={4} />
           </Suspense>
         </Canvas>
         {/* CSS vignette — same technique as Hero, zero GPU overhead vs PostFX EffectComposer */}

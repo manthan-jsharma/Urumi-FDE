@@ -471,10 +471,12 @@ export function RingMesh({
   useFrame(({ clock }, delta) => {
     const group = groupRef.current
     if (!group) return
+    // Cap delta to 40ms — prevents a large jump after a main-thread stall
+    const d = Math.min(delta, 0.04)
 
     if (autoRotate) {
       const t = clock.getElapsedTime()
-      group.rotation.y += delta * rotateSpeed
+      group.rotation.y += d * rotateSpeed
       group.rotation.x  = Math.sin(t * 0.4) * 0.04
     }
 

@@ -507,7 +507,7 @@ export function Hero({ onReady }: { onReady?: () => void }) {
               toneMapping: 4,
               toneMappingExposure: 1.55,
             }}
-            dpr={[1, 1.5]}
+            dpr={[1, 1.2]}
             frameloop={canvasActive ? "always" : "demand"}
           >
             <color attach="background" args={["#0a0a0a"]} />
@@ -584,8 +584,8 @@ export function Hero({ onReady }: { onReady?: () => void }) {
               />
               <PostFX
                 bloom
-                bloomIntensity={0.08}
-                bloomThreshold={0.48}
+                bloomIntensity={0.12}
+                bloomThreshold={0.88}
                 vignette={0}
               />
             </Suspense>
