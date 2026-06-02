@@ -296,6 +296,30 @@ else
   echo "$RING_ID" >> /var/www/html/.aurelia-keys
 fi
 
+# ── Generate keys if products exist but keys file is missing ────────────
+if [ ! -f /var/www/html/.aurelia-keys ]; then
+  echo "🔑 Generating WooCommerce API keys (first time)..."
+  RING_ID=$($WP post list --post_type=product --name="aurelia-twist-ring" --format=ids 2>/dev/null | awk '{print $1}')
+  $WP eval '
+    global $wpdb;
+    $consumer_key    = "ck_" . wc_rand_hash();
+    $consumer_secret = "cs_" . wc_rand_hash();
+    $wpdb->insert(
+      $wpdb->prefix . "woocommerce_api_keys",
+      array(
+        "user_id"         => 1,
+        "description"     => "Aurelia Frontend",
+        "permissions"     => "read_write",
+        "consumer_key"    => wc_api_hash($consumer_key),
+        "consumer_secret" => $consumer_secret,
+        "truncated_key"   => substr($consumer_key, -7),
+      )
+    );
+    echo $consumer_key . "\n" . $consumer_secret . "\n";
+  ' > /var/www/html/.aurelia-keys 2>/dev/null
+  echo "${RING_ID:-29}" >> /var/www/html/.aurelia-keys
+fi
+
 # ── Always output credentials (from persistent store) ───────────────────
 if [ -f /var/www/html/.aurelia-keys ]; then
   KEY=$(sed -n '1p' /var/www/html/.aurelia-keys)
