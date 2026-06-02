@@ -1,0 +1,62 @@
+services:
+  db:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress_pass
+      MYSQL_ROOT_PASSWORD: root_pass
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "wordpress", "-pwordpress_pass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  wordpress:
+    image: wordpress:latest
+    restart: always
+    ports:
+      - "8181:80"
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress_pass
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_TABLE_PREFIX: wp_
+      WORDPRESS_DEBUG: "false"
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_SITEURL', 'http://localhost:8181');
+        define('WP_HOME', 'http://localhost:8181');
+        define('WP_MEMORY_LIMIT', '256M');
+        define('FORCE_SSL_ADMIN', false);
+    volumes:
+      - wordpress_data:/var/www/html
+      - ./wordpress/cors.php:/var/www/html/wp-content/mu-plugins/cors.php
+    depends_on:
+      db:
+        condition: service_healthy
+
+  wpcli:
+    image: wordpress:cli
+    restart: "no"
+    user: root
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress_pass
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - wordpress_data:/var/www/html
+      - ./wordpress:/setup
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles:
+      - tools
+
+volumes:
+  db_data:
+  wordpress_data:

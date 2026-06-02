@@ -1,0 +1,17 @@
+public/UI Inspirations/
+public/how its looking now/
+node_modules/
+.next/
+.env*.local
+*.pem
+.DS_Store
+.turbo/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+.vercel
+.pnp
+.pnp.js
+.yarn/install-state.gz
