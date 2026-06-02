@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useConfigStore } from '@/lib/store'
+import { useRouter } from 'next/navigation'
 
 export function CartDrawer() {
   const [mounted, setMounted] = useState(false)
@@ -11,6 +12,7 @@ export function CartDrawer() {
   const cartOpen = useConfigStore((s) => s.cartOpen)
   const cartItems = useConfigStore((s) => s.cartItems)
   const setCartOpen = useConfigStore((s) => s.setCartOpen)
+  const router = useRouter()
 
   // Close on Escape
   useEffect(() => {
@@ -167,9 +169,9 @@ export function CartDrawer() {
                     ${cartItems.reduce((s, i) => s + i.price, 0).toLocaleString()}
                   </span>
                 </div>
-                <a
-                  href={`${process.env.NEXT_PUBLIC_WC_URL || 'http://localhost:8181'}/checkout`}
+                <button
                   data-cursor-hover
+                  onClick={() => router.push('/checkout')}
                   style={{
                     display: 'block',
                     width: '100%',
@@ -181,20 +183,21 @@ export function CartDrawer() {
                     fontSize: 11,
                     letterSpacing: '0.15em',
                     textTransform: 'uppercase',
-                    textDecoration: 'none',
+                    cursor: 'pointer',
                     transition: 'background 0.3s ease, color 0.3s ease',
+                    fontFamily: 'var(--font-body)',
                   }}
                   onMouseEnter={(e) => {
-                    ;(e.currentTarget as HTMLAnchorElement).style.background = 'var(--gold)'
-                    ;(e.currentTarget as HTMLAnchorElement).style.color = '#0a0a0a'
+                    e.currentTarget.style.background = 'var(--gold)'
+                    e.currentTarget.style.color = '#0a0a0a'
                   }}
                   onMouseLeave={(e) => {
-                    ;(e.currentTarget as HTMLAnchorElement).style.background = 'none'
-                    ;(e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-primary)'
+                    e.currentTarget.style.background = 'none'
+                    e.currentTarget.style.color = 'var(--text-primary)'
                   }}
                 >
                   Proceed to Checkout
-                </a>
+                </button>
                 <p style={{
                   textAlign: 'center',
                   fontSize: 11,

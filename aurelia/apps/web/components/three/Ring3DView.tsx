@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Environment, OrbitControls, ContactShadows } from '@react-three/drei'
+import { OrbitControls, ContactShadows } from '@react-three/drei'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import gsap from 'gsap'
@@ -25,13 +25,14 @@ function CameraIntro() {
 }
 
 function Particles() {
-  const particles = Array.from({ length: 50 }, (_, i) => ({
+  const particles = Array.from({ length: 160 }, (_, i) => ({
     id: i,
     x: Math.random() * 100,
     y: Math.random() * 100,
-    size: Math.random() * 1.5 + 0.5,
-    duration: Math.random() * 6 + 4,
-    delay: Math.random() * 4,
+    size: Math.random() * 2.5 + 0.3,
+    duration: Math.random() * 8 + 4,
+    delay: Math.random() * 6,
+    opacity: Math.random() * 0.5 + 0.15,
   }))
 
   return (
@@ -40,7 +41,7 @@ function Particles() {
         <div key={p.id} style={{
           position: 'absolute', left: `${p.x}%`, top: `${p.y}%`,
           width: p.size, height: p.size, borderRadius: '50%',
-          background: 'rgba(201, 168, 76, 0.35)',
+          background: `rgba(201, 168, 76, ${p.opacity})`,
           animation: `particleFloat ${p.duration}s ${p.delay}s ease-in-out infinite alternate`,
         }} />
       ))}
@@ -76,9 +77,9 @@ export function Ring3DView() {
           <Suspense fallback={null}>
             <LightTentEnvironment />
             <CameraIntro />
-            <RingMesh metalKey={metal} autoRotate />
-            <spotLight position={[4, 7, 3]} intensity={2} angle={0.4} penumbra={0.9} castShadow />
-            <ambientLight intensity={0.1} />
+            <RingMesh metalKey={metal} autoRotate stoneEnvIntensity={5.5} stoneTransmission={0.88} />
+            <spotLight position={[5, 8, 3]} intensity={2.5} angle={0.35} penumbra={0.8} castShadow />
+            <ambientLight intensity={0.12} />
             <ContactShadows position={[0, -1.0, 0]} opacity={0.5} blur={3} scale={4} />
             <PostFX vignette={0.6} bloom dofFocusDistance={3.8} dofFocusRange={1.4} dofBokeh={0.5} dof />
           </Suspense>

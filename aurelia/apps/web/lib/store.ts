@@ -24,6 +24,7 @@ interface ConfigStore {
   cartCount: number
   cartItems: CartItem[]
   cartOpen: boolean
+  cartKey: string | null
 
   // UI
   userInteracting: boolean
@@ -38,6 +39,7 @@ interface ConfigStore {
   addCartItem: (item: CartItem) => void
   setUserInteracting: (v: boolean) => void
   setShowCallout: (v: boolean) => void
+  setCartKey: (key: string) => void
 }
 
 export const useConfigStore = create<ConfigStore>((set) => ({
@@ -48,6 +50,7 @@ export const useConfigStore = create<ConfigStore>((set) => ({
   cartCount: 0,
   cartItems: [],
   cartOpen: false,
+  cartKey: null,
   userInteracting: false,
   showCallout: false,
 
@@ -63,4 +66,5 @@ export const useConfigStore = create<ConfigStore>((set) => ({
     })),
   setUserInteracting: (userInteracting) => set({ userInteracting }),
   setShowCallout: (showCallout) => set({ showCallout }),
+  setCartKey: (cartKey) => set({ cartKey }),
 }))

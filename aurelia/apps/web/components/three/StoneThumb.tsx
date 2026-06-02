@@ -1,11 +1,19 @@
 'use client'
 
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Suspense, useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { makeDiamond } from '@/components/three/RingMesh'
 import { LightTentEnvironment } from '@/components/three/LightTentEnvironment'
+
+function DarkBackground() {
+  const { scene } = useThree()
+  useEffect(() => {
+    scene.background = new THREE.Color('#0a0a0a')
+  }, [scene])
+  return null
+}
 
 type StoneShape = 'round' | 'oval' | 'princess' | 'cushion' | 'marquise' | 'pear'
 
@@ -18,7 +26,7 @@ export function StoneGeometry({ shape }: { shape: StoneShape }) {
     while (groupRef.current.children.length) {
       groupRef.current.remove(groupRef.current.children[0])
     }
-    const diamond = makeDiamond(0.48, 0.48 * 1.55, shape, 6.5, 0.88)
+    const diamond = makeDiamond(0.48, 0.48 * 1.55, shape, 12, 0)
     groupRef.current.add(diamond)
 
     return () => {
@@ -70,14 +78,16 @@ export function StoneThumb({ shape, selected, label, onClick }: StoneThumbProps)
       }}>
         <Canvas
           camera={{ position: [0, 0.3, 2.4], fov: 40 }}
-          gl={{ antialias: true, alpha: false, toneMapping: 4 }}
+          gl={{ antialias: true, alpha: true, toneMapping: 4 }}
           frameloop="demand"
           dpr={[1, 1.5]}
         >
           <Suspense fallback={null}>
-            <LightTentEnvironment />
-            <spotLight position={[2, 4, 2]} intensity={1.8} angle={0.4} penumbra={0.7} />
-            <ambientLight intensity={0.08} />
+            <LightTentEnvironment transparent={false} />
+            <DarkBackground />
+            <spotLight position={[2, 4, 2]} intensity={3} angle={0.4} penumbra={0.5} color="#fff8f0" />
+            <spotLight position={[-2, 2, 1]} intensity={1.5} angle={0.5} penumbra={0.8} color="#ffffff" />
+            <ambientLight intensity={0.15} />
             <StoneGeometry shape={shape} />
             <OrbitControls
               enableZoom={false}

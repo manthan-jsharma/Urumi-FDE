@@ -17,6 +17,7 @@ export function useCart() {
   const price = useConfigStore((s) => s.price)
   const addCartItem = useConfigStore((s) => s.addCartItem)
   const setCartOpen = useConfigStore((s) => s.setCartOpen)
+  const setCartKey = useConfigStore((s) => s.setCartKey)
 
   async function handleAddToCart() {
     if (adding) return
@@ -28,13 +29,14 @@ export function useCart() {
     const finalPrice = price ?? 980
 
     try {
-      await apiAddToCart({
+      const result = await apiAddToCart({
         metalKey: metal,
         stoneKey: stone,
         metalLabel,
         stoneLabel,
         price: finalPrice,
       })
+      if (result.cartKey) setCartKey(result.cartKey)
 
       addCartItem({
         id: generateId(),

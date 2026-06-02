@@ -1,8 +1,15 @@
 #!/bin/bash
 set -e
 
+# Usage:
+#   Local Docker:  ./setup.sh                              (defaults to http://localhost:8181)
+#   InstaWP/live:  ./setup.sh https://yoursite.instawp.xyz
+
+SITE_URL="${1:-http://localhost:8181}"
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Aurelia — WooCommerce Setup"
+echo "  Site URL: $SITE_URL"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 WP="wp --allow-root --path=/var/www/html"
@@ -19,7 +26,7 @@ echo "✔ WordPress files present"
 if ! $WP core is-installed 2>/dev/null; then
   echo "🔧 Installing WordPress core..."
   $WP core install \
-    --url="http://localhost:8181" \
+    --url="$SITE_URL" \
     --title="Aurelia" \
     --admin_user="admin" \
     --admin_password="admin123" \
@@ -27,6 +34,8 @@ if ! $WP core is-installed 2>/dev/null; then
   echo "✔ WordPress core installed"
 else
   echo "✔ WordPress already installed"
+  $WP option update siteurl "$SITE_URL"
+  $WP option update home "$SITE_URL"
 fi
 
 # ── Fix wp-content permissions so plugins can be installed ──────────────────
@@ -313,8 +322,8 @@ fi
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Setup complete."
-echo "  WordPress admin: http://localhost:8080/wp-admin"
-echo "  REST API:        http://localhost:8080/wp-json/wc/v3"
-echo "  CoCart API:      http://localhost:8080/wp-json/cocart/v2"
+echo "  WordPress admin: $SITE_URL/wp-admin"
+echo "  REST API:        $SITE_URL/wp-json/wc/v3"
+echo "  CoCart API:      $SITE_URL/wp-json/cocart/v2"
 echo "  Copy the keys above into apps/web/.env.local"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

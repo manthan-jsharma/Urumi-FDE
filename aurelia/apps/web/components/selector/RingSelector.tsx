@@ -63,6 +63,16 @@ export function RingSelector() {
     })
   }
 
+  const particles = Array.from({ length: 160 }, (_, i) => ({
+    id: i,
+    x: Math.random() * 100,
+    y: Math.random() * 100,
+    size: Math.random() * 2.5 + 0.3,
+    duration: Math.random() * 8 + 4,
+    delay: Math.random() * 6,
+    opacity: Math.random() * 0.5 + 0.15,
+  }))
+
   return (
     <div style={{
       width: '100vw',
@@ -73,6 +83,19 @@ export function RingSelector() {
       flexDirection: 'column',
       position: 'relative',
     }}>
+
+      {/* Particles */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 0 }}>
+        {particles.map(p => (
+          <div key={p.id} style={{
+            position: 'absolute', left: `${p.x}%`, top: `${p.y}%`,
+            width: p.size, height: p.size, borderRadius: '50%',
+            background: `rgba(201, 168, 76, ${p.opacity})`,
+            animation: `particleFloat ${p.duration}s ${p.delay}s ease-in-out infinite alternate`,
+          }} />
+        ))}
+        <style>{`@keyframes particleFloat { from { transform: translateY(0px); opacity: 0.2; } to { transform: translateY(-18px); opacity: 0.8; } }`}</style>
+      </div>
 
       {/* ── Floating back + counter ─────────────────────────────────── */}
       <div style={{

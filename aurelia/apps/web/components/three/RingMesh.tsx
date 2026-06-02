@@ -56,29 +56,30 @@ function makeDiamondMat(envIntensity = 5.5, transmission = 0.88): THREE.MeshPhys
   const hasTransmission = transmission > 0
 
   return new THREE.MeshPhysicalMaterial({
-    // Slight blue-white — characteristic of a D/E grade brilliant diamond
-    color:               new THREE.Color(hasTransmission ? '#ffffff' : '#eef4ff'),
+    color:               new THREE.Color('#ffffff'),
 
-    // Transmission path (requires scene.background to refract into)
     transmission:        hasTransmission ? transmission : 0,
-    thickness:           hasTransmission ? 1.8  : 0,
+    thickness:           hasTransmission ? 2.4  : 0,
     ior:                 2.42,
-    attenuationDistance: hasTransmission ? 8.0  : 0,
-    attenuationColor:    new THREE.Color('#ffffff'),
+    attenuationDistance: hasTransmission ? 3.5  : 0,
+    attenuationColor:    new THREE.Color('#fdfaf5'),
 
-    roughness:           0.0,    // perfect mirror at every facet
+    roughness:           0.0,
     metalness:           0.0,
     envMapIntensity:     envIntensity,
 
-    // When transmission === 0 render as opaque so depth sorts correctly against band
     transparent:         hasTransmission,
     depthWrite:          !hasTransmission,
 
-    clearcoat:           1.0,    // secondary Fresnel layer → surface "wetness"
+    clearcoat:           1.0,
     clearcoatRoughness:  0.0,
     reflectivity:        1.0,
 
-    flatShading:         true,   // each polygon = one flat mirror → distinct facet flashes
+    // Iridescence fakes the chromatic dispersion (fire) of a real diamond
+    iridescence:         hasTransmission ? 0.5 : 0.8,
+    iridescenceIOR:      2.0,
+
+    flatShading:         true,
     side:                THREE.DoubleSide,
   })
 }
