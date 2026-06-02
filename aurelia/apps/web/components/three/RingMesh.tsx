@@ -75,9 +75,10 @@ function makeDiamondMat(envIntensity = 5.5, transmission = 0.88): THREE.MeshPhys
     clearcoatRoughness:  0.0,
     reflectivity:        1.0,
 
-    // Iridescence fakes the chromatic dispersion (fire) of a real diamond
-    iridescence:         hasTransmission ? 0.5 : 0.8,
-    iridescenceIOR:      2.0,
+    // Iridescence fakes chromatic dispersion (fire). Higher for opaque thumbnails
+    // because they have no transmission to provide interior depth.
+    iridescence:         hasTransmission ? 0.6 : 1.0,
+    iridescenceIOR:      2.2,
 
     flatShading:         true,
     side:                THREE.DoubleSide,

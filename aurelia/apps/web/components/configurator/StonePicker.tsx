@@ -55,7 +55,7 @@ function StonePreview({ shape, y }: { shape: string; y: number }) {
         >
           <Suspense fallback={null}>
             <LightTentEnvironment transparent={false} />
-            <DarkBackground />
+            <DarkBackground color="#050e08" />
             <spotLight position={[2, 5, 2.5]} intensity={14} angle={0.13} penumbra={0.04} color="#ffffff" />
             <spotLight position={[-2.5, 3.5, 1.5]} intensity={10} angle={0.16} penumbra={0.06} color="#ffffff" />
             <spotLight position={[0.3, 7, 0.5]} intensity={12} angle={0.11} penumbra={0.03} color="#ffffff" />

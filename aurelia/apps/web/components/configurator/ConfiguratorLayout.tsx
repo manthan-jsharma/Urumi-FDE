@@ -1,9 +1,10 @@
 'use client'
 
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { ContactShadows, OrbitControls } from '@react-three/drei'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useConfigStore } from '@/lib/store'
 import { METAL_CONFIGS, STONE_CONFIGS } from '@/lib/materials'
 import { RingMesh } from '@/components/three/RingMesh'
@@ -88,8 +89,18 @@ function RingScene() {
 export function ConfiguratorLayout() {
   const metal = useConfigStore((s) => s.metal)
   const stone = useConfigStore((s) => s.stone)
+  const setMetal = useConfigStore((s) => s.setMetal)
+  const setStone = useConfigStore((s) => s.setStone)
   const cartCount = useConfigStore((s) => s.cartCount)
   const setCartOpen = useConfigStore((s) => s.setCartOpen)
+
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    const m = searchParams.get('metal')
+    const s = searchParams.get('stone')
+    if (m && METAL_CONFIGS[m]) setMetal(m)
+    if (s && STONE_CONFIGS[s]) setStone(s)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: 'var(--dark)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

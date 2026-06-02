@@ -7,11 +7,11 @@ import * as THREE from 'three'
 import { makeDiamond } from '@/components/three/RingMesh'
 import { LightTentEnvironment } from '@/components/three/LightTentEnvironment'
 
-export function DarkBackground() {
+export function DarkBackground({ color = '#0a0a0a' }: { color?: string }) {
   const { scene } = useThree()
   useEffect(() => {
-    scene.background = new THREE.Color('#0a0a0a')
-  }, [scene])
+    scene.background = new THREE.Color(color)
+  }, [scene, color])
   return null
 }
 

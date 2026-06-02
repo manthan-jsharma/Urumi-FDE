@@ -55,11 +55,13 @@ export function RingSelector() {
   }
 
   function handleConfigure() {
+    const stone = current.stones[variant]
+    const metal = current.metal
     gsap.to(ringWrapRef.current, {
       scale: 1.04,
       duration: 0.28,
       ease: 'power2.in',
-      onComplete: () => goToPage('/configure'),
+      onComplete: () => goToPage(`/configure?metal=${metal}&stone=${stone}`),
     })
   }
 
