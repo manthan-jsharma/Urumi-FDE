@@ -57,15 +57,6 @@ else
   echo "✔ WooCommerce already active"
 fi
 
-# ── Install CoCart (headless cart API) ──────────────────────────────────────
-if ! $WP plugin is-active cart-rest-api-for-woocommerce 2>/dev/null; then
-  echo "📦 Installing CoCart..."
-  $WP plugin install cart-rest-api-for-woocommerce --activate
-  echo "✔ CoCart installed and activated"
-else
-  echo "✔ CoCart already active"
-fi
-
 # ── WooCommerce initial setup ────────────────────────────────────────────────
 echo "⚙️  Configuring WooCommerce..."
 $WP option update woocommerce_store_address "123 Jewelry Lane"
