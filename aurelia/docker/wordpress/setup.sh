@@ -281,49 +281,45 @@ else
 
   echo "✔ Products seeded. Main product ID: $RING_ID"
 
-  # ── Generate API keys ────────────────────────────────────────────────────
+  # ── Generate API keys and persist them ──────────────────────────────────
   echo "🔑 Generating WooCommerce API keys..."
 
   $WP eval '
-    $user_id = 1;
-    $data = array(
-      "user_id"     => $user_id,
-      "description" => "Aurelia Frontend",
-      "permissions" => "read_write",
+    global $wpdb;
+    $consumer_key    = "ck_" . wc_rand_hash();
+    $consumer_secret = "cs_" . wc_rand_hash();
+    $wpdb->insert(
+      $wpdb->prefix . "woocommerce_api_keys",
+      array(
+        "user_id"         => 1,
+        "description"     => "Aurelia Frontend",
+        "permissions"     => "read_write",
+        "consumer_key"    => wc_api_hash($consumer_key),
+        "consumer_secret" => $consumer_secret,
+        "truncated_key"   => substr($consumer_key, -7),
+      )
     );
-    $keys = WC_Auth::create_keys($data);
-    echo "WC_CONSUMER_KEY=" . $keys["consumer_key"] . "\n";
-    echo "WC_CONSUMER_SECRET=" . $keys["consumer_secret"] . "\n";
-    echo "NEXT_PUBLIC_COMPOSITE_PRODUCT_ID=" . '"$RING_ID"' . "\n";
-  ' 2>/dev/null || {
-    # Fallback: generate via REST API key table directly
-    $WP eval '
-      global $wpdb;
-      $consumer_key    = "ck_" . wc_rand_hash();
-      $consumer_secret = "cs_" . wc_rand_hash();
-      $wpdb->insert(
-        $wpdb->prefix . "woocommerce_api_keys",
-        array(
-          "user_id"         => 1,
-          "description"     => "Aurelia Frontend",
-          "permissions"     => "read_write",
-          "consumer_key"    => wc_api_hash($consumer_key),
-          "consumer_secret" => $consumer_secret,
-          "truncated_key"   => substr($consumer_key, -7),
-        )
-      );
-      echo "WC_CONSUMER_KEY=" . $consumer_key . "\n";
-      echo "WC_CONSUMER_SECRET=" . $consumer_secret . "\n";
-      echo "NEXT_PUBLIC_COMPOSITE_PRODUCT_ID='"$RING_ID"'\n";
-    '
-  }
+    echo $consumer_key . "\n" . $consumer_secret . "\n";
+  ' > /var/www/html/.aurelia-keys 2>/dev/null
+
+  echo "$RING_ID" >> /var/www/html/.aurelia-keys
+fi
+
+# ── Always output credentials (from persistent store) ───────────────────
+if [ -f /var/www/html/.aurelia-keys ]; then
+  KEY=$(sed -n '1p' /var/www/html/.aurelia-keys)
+  SECRET=$(sed -n '2p' /var/www/html/.aurelia-keys)
+  PRODUCT=$(sed -n '3p' /var/www/html/.aurelia-keys)
+  echo ""
+  echo "AURELIA_WC_URL=$SITE_URL"
+  echo "AURELIA_WC_KEY=$KEY"
+  echo "AURELIA_WC_SECRET=$SECRET"
+  echo "AURELIA_PRODUCT_ID=$PRODUCT"
 fi
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Setup complete."
-echo "  WordPress admin: $SITE_URL/wp-admin"
+echo "  WordPress admin: $SITE_URL/wp-admin  (admin / admin123)"
 echo "  REST API:        $SITE_URL/wp-json/wc/v3"
-echo "  CoCart API:      $SITE_URL/wp-json/cocart/v2"
-echo "  Copy the keys above into apps/web/.env.local"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

@@ -25,42 +25,28 @@ A premium 3D product experience where a shopper can rotate a ring, switch metals
 - Node 18+
 - Docker Desktop
 
-### 1. Start WooCommerce backend
+### One command from repo root
 
 ```bash
-cd aurelia/docker
-docker compose up -d
+./start.sh
 ```
 
-Wait ~30 seconds, then run the setup script:
+This script:
+1. Starts WordPress + MySQL via Docker
+2. Waits for WordPress to initialize
+3. Installs WooCommerce, creates the composite ring product + all metal/stone sub-products
+4. Writes `aurelia/apps/web/.env.local` with the generated API credentials
+5. Installs npm dependencies
+
+Then start the frontend:
 
 ```bash
-cd aurelia
-./setup.sh http://localhost:8181
-```
-
-This installs WooCommerce, creates the composite ring product with metal/stone sub-products, and outputs API credentials.
-
-### 2. Configure environment
-
-Create `aurelia/apps/web/.env.local`:
-
-```env
-NEXT_PUBLIC_WC_URL=http://localhost:8181
-NEXT_PUBLIC_WC_KEY=<key from setup output>
-NEXT_PUBLIC_WC_SECRET=<secret from setup output>
-NEXT_PUBLIC_COMPOSITE_PRODUCT_ID=<id from setup output>
-```
-
-### 3. Start frontend
-
-```bash
-cd aurelia/apps/web
-npm install
-npm run dev
+cd aurelia/apps/web && npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+> **Note:** First run takes ~2 minutes (WordPress + WooCommerce install). Subsequent `./start.sh` runs skip setup and finish in seconds.
 
 ---
 
