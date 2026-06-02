@@ -24,9 +24,9 @@ function CameraRig({
   }>;
 }) {
   useFrame(({ camera }) => {
-    camera.position.x += (target.current.x - camera.position.x) * 0.09;
-    camera.position.y += (target.current.y - camera.position.y) * 0.09;
-    camera.position.z += (target.current.z - camera.position.z) * 0.09;
+    camera.position.x += (target.current.x - camera.position.x) * 0.18;
+    camera.position.y += (target.current.y - camera.position.y) * 0.18;
+    camera.position.z += (target.current.z - camera.position.z) * 0.18;
     const cur = (camera.userData.lookAtY as number) ?? 0.1;
     const next = cur + (target.current.lookAtY - cur) * 0.09;
     camera.userData.lookAtY = next;
@@ -162,7 +162,7 @@ export function Hero({ onReady }: { onReady?: () => void }) {
       end: "+=520%",
       pin: true,
       anticipatePin: 1,
-      scrub: 0.6,
+      scrub: 0.35,
       onUpdate: (self) => {
         const p = self.progress;
 
@@ -505,14 +505,14 @@ export function Hero({ onReady }: { onReady?: () => void }) {
               antialias: true,
               alpha: false,
               toneMapping: 4,
-              toneMappingExposure: 1.55,
+              toneMappingExposure: 1.1,
             }}
             dpr={[1, 1.2]}
             frameloop={canvasActive ? "always" : "demand"}
           >
             <color attach="background" args={["#0a0a0a"]} />
             <Suspense fallback={null}>
-              <LightTentEnvironment backgroundIntensity={0.11} />
+              <LightTentEnvironment transparent={true} />
               {/*
               4-light diamond rig (all castShadow:false for perf).
               Diamond sits at approx world-y ≈ 1.0–1.3 (top of ring, scale 1.8).
@@ -545,18 +545,18 @@ export function Hero({ onReady }: { onReady?: () => void }) {
               {/* 2. Left cool accent — cold-white, left kite facets */}
               <spotLight
                 position={[-1.8, 3, 2.5]}
-                intensity={80}
+                intensity={55}
                 angle={0.2}
-                penumbra={0.6}
+                penumbra={0.8}
                 color="#bbd4ff"
                 castShadow={false}
               />
               {/* 3. Right warm accent — warm-white, right kite facets */}
               <spotLight
                 position={[1.8, 3, 2.5]}
-                intensity={80}
+                intensity={55}
                 angle={0.2}
-                penumbra={0.6}
+                penumbra={0.8}
                 color="#ffd8a0"
                 castShadow={false}
               />
@@ -570,8 +570,8 @@ export function Hero({ onReady }: { onReady?: () => void }) {
                 autoRotate
                 metalKey="18k-yellow"
                 rotateSpeed={0.38}
-                stoneEnvIntensity={7}
-                stoneTransmission={0.55}
+                stoneEnvIntensity={8}
+                stoneTransmission={0.88}
                 mouseRef={mouseRef}
                 onReady={onReady}
               />
@@ -584,8 +584,8 @@ export function Hero({ onReady }: { onReady?: () => void }) {
               />
               <PostFX
                 bloom
-                bloomIntensity={0.12}
-                bloomThreshold={0.88}
+                bloomIntensity={0.06}
+                bloomThreshold={0.92}
                 vignette={0}
               />
             </Suspense>
