@@ -22,10 +22,10 @@ export function LandingPage() {
 
   useEffect(() => {
     const lenis = new Lenis({
-      duration: 1.0,
+      duration: 0.65,
       easing: (t) => 1 - Math.pow(1 - t, 3),
       smoothWheel: true,
-      wheelMultiplier: 0.9,
+      wheelMultiplier: 1.0,
     })
 
     lenis.on('scroll', ScrollTrigger.update)
@@ -33,8 +33,8 @@ export function LandingPage() {
     gsap.ticker.add(tickerFn)
     gsap.ticker.lagSmoothing(0)
 
-    // Recalculate all pin heights now that Lenis is mounted and layout is final.
-    // Child useEffects already created their ScrollTrigger instances — refresh re-measures them.
+    // Initial refresh — measures pinned section heights before canvas has loaded.
+    // A second refresh fires in handleRingReady once the GLB is resolved.
     ScrollTrigger.refresh()
 
     return () => {
@@ -43,10 +43,17 @@ export function LandingPage() {
     }
   }, [])
 
+  function handleRingReady() {
+    setRingLoaded(true)
+    // Canvas is now sized and the GLB is resolved — re-measure all pin spacers
+    // so the Hero's 520% scrub maps to the correct scroll distance.
+    ScrollTrigger.refresh()
+  }
+
   return (
     <main>
       <RingLoader isLoaded={ringLoaded} />
-      <Hero onReady={() => setRingLoaded(true)} />
+      <Hero onReady={handleRingReady} />
       <HorizontalFeatures />
       <Testimonials />
       <FinalCTA />

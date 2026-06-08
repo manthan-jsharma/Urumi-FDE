@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, Suspense, MutableRefObject } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { ContactShadows } from "@react-three/drei";
-import { PostFX } from "@/components/three/PostFX";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { RingMesh } from "@/components/three/RingMesh";
@@ -12,7 +11,7 @@ import { useNavigate } from "@/components/ui/PageTransition";
 
 gsap.registerPlugin(ScrollTrigger);
 
-// ── Camera rig — lerps position + lookAt target ────────────────
+// ── Camera rig — frame-rate-independent lerp ──────────────────
 function CameraRig({
   target,
 }: {
@@ -23,17 +22,21 @@ function CameraRig({
     lookAtY: number;
   }>;
 }) {
-  useFrame(({ camera }) => {
-    camera.position.x += (target.current.x - camera.position.x) * 0.18;
-    camera.position.y += (target.current.y - camera.position.y) * 0.18;
-    camera.position.z += (target.current.z - camera.position.z) * 0.18;
-    const cur = (camera.userData.lookAtY as number) ?? 0.1;
-    const next = cur + (target.current.lookAtY - cur) * 0.09;
+  useFrame(({ camera }, delta) => {
+    // Exponential decay: same feel at any fps. At 60fps gives same result as * 0.18.
+    const t  = 1 - Math.pow(0.82, delta * 60);
+    const tL = 1 - Math.pow(0.91, delta * 60);
+    camera.position.x += (target.current.x - camera.position.x) * t;
+    camera.position.y += (target.current.y - camera.position.y) * t;
+    camera.position.z += (target.current.z - camera.position.z) * t;
+    const cur  = (camera.userData.lookAtY as number) ?? 0.1;
+    const next = cur + (target.current.lookAtY - cur) * tL;
     camera.userData.lookAtY = next;
     camera.lookAt(0, next, 0);
   });
   return null;
 }
+
 
 export function Hero({ onReady }: { onReady?: () => void }) {
   const navigate = useNavigate();
@@ -161,8 +164,7 @@ export function Hero({ onReady }: { onReady?: () => void }) {
       start: "top top",
       end: "+=520%",
       pin: true,
-      anticipatePin: 1,
-      scrub: 0.35,
+      scrub: true,
       onUpdate: (self) => {
         const p = self.progress;
 
@@ -291,24 +293,24 @@ export function Hero({ onReady }: { onReady?: () => void }) {
     cacheBtnRect();
     window.addEventListener("resize", cacheBtnRect);
 
+    const btn = magnetRef.current;
+    const qtX = btn ? gsap.quickTo(btn, "x", { duration: 0.4, ease: "power2.out" }) : null;
+    const qtY = btn ? gsap.quickTo(btn, "y", { duration: 0.4, ease: "power2.out" }) : null;
+
     function onMouseMove(e: MouseEvent) {
       mouseRef.current = {
         x: (e.clientX / window.innerWidth) * 2 - 1,
         y: (e.clientY / window.innerHeight) * 2 - 1,
       };
-      const btn = magnetRef.current;
-      if (!btn || !btnRect) return;
+      if (!qtX || !qtY || !btnRect) return;
       const { bx, by } = btnRect;
       const d = Math.hypot(e.clientX - bx, e.clientY - by);
-      if (d < 90)
-        gsap.to(btn, {
-          x: (e.clientX - bx) * 0.28,
-          y: (e.clientY - by) * 0.28,
-          duration: 0.4,
-          ease: "power2.out",
-        });
-      else
+      if (d < 90) {
+        qtX((e.clientX - bx) * 0.28);
+        qtY((e.clientY - by) * 0.28);
+      } else {
         gsap.to(btn, { x: 0, y: 0, duration: 0.6, ease: "elastic.out(1,0.4)" });
+      }
     }
     window.addEventListener("mousemove", onMouseMove, { passive: true });
     return () => {
@@ -508,7 +510,7 @@ export function Hero({ onReady }: { onReady?: () => void }) {
               toneMappingExposure: 1.1,
             }}
             dpr={[1, 1.2]}
-            frameloop={canvasActive ? "always" : "demand"}
+            frameloop={canvasActive ? 'always' : 'demand'}
           >
             <color attach="background" args={["#0a0a0a"]} />
             <Suspense fallback={null}>
@@ -570,7 +572,7 @@ export function Hero({ onReady }: { onReady?: () => void }) {
                 autoRotate
                 metalKey="18k-yellow"
                 rotateSpeed={0.38}
-                stoneEnvIntensity={8}
+                stoneEnvIntensity={6}
                 stoneTransmission={0.88}
                 mouseRef={mouseRef}
                 onReady={onReady}
@@ -581,12 +583,7 @@ export function Hero({ onReady }: { onReady?: () => void }) {
                 blur={2}
                 scale={5}
                 far={2}
-              />
-              <PostFX
-                bloom
-                bloomIntensity={0.06}
-                bloomThreshold={0.92}
-                vignette={0}
+                frames={1}
               />
             </Suspense>
             <CameraRig target={cameraTarget} />

@@ -70,14 +70,17 @@ export function AddToCart() {
         gap: 20,
         marginTop: 14,
       }}>
-        {['Free shipping', 'Resize for life', 'Made to order'].map((item) => (
-          <span key={item} style={{
-            fontSize: 10,
-            color: 'var(--text-muted)',
-            letterSpacing: '0.06em',
-            fontFamily: 'var(--font-body)',
-          }}>
-            {item}
+        {['Free shipping', 'Resize for life', 'Made to order'].map((item, i) => (
+          <span key={item} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {i > 0 && <span style={{ color: 'rgba(201,168,76,0.35)', fontSize: 8 }}>—</span>}
+            <span style={{
+              fontSize: 10,
+              color: 'var(--text-secondary)',
+              letterSpacing: '0.06em',
+              fontFamily: 'var(--font-body)',
+            }}>
+              {item}
+            </span>
           </span>
         ))}
       </div>

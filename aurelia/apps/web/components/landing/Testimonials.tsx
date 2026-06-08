@@ -81,7 +81,7 @@ export function Testimonials() {
           trigger: section,
           start: 'top bottom',
           end: 'bottom top',
-          scrub: 0.8,
+          scrub: true,
         },
       }
     )
@@ -96,7 +96,7 @@ export function Testimonials() {
           trigger: section,
           start: 'top bottom',
           end: 'bottom top',
-          scrub: 0.8,
+          scrub: true,
         },
       }
     )

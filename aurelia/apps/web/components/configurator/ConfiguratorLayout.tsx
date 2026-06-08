@@ -55,7 +55,7 @@ function RingScene() {
   return (
     <Canvas
       camera={{ position: [0, 0.5, 3.5], fov: 40 }}
-      gl={{ antialias: true, alpha: false, toneMapping: 4 }}
+      gl={{ antialias: true, alpha: false, toneMapping: 4, toneMappingExposure: 0.72 }}
       dpr={[1, 2]}
       shadows
     >
@@ -117,15 +117,16 @@ export function ConfiguratorLayout() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
           <Link href="/select" data-cursor-hover style={{
-            fontSize: 11, letterSpacing: '0.14em', color: 'var(--text-muted)',
+            fontSize: 11, letterSpacing: '0.14em', color: 'var(--text-secondary)',
             textTransform: 'uppercase', fontFamily: 'var(--font-body)', textDecoration: 'none', transition: 'color 0.3s ease',
+            display: 'flex', alignItems: 'center', gap: 7,
           }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-secondary)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--gold)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-secondary)')}
           >
-            ← Back
+            <span style={{ color: 'var(--gold)', opacity: 0.7, fontSize: 13 }}>←</span> Back
           </Link>
-          <div style={{ fontSize: 11, letterSpacing: '0.14em', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
+          <div style={{ fontSize: 11, letterSpacing: '0.14em', color: 'var(--text-secondary)', fontFamily: 'var(--font-body)' }}>
             Aurelia — Twist Ring
           </div>
         </div>
@@ -162,7 +163,11 @@ export function ConfiguratorLayout() {
           padding: '40px 32px', display: 'flex', flexDirection: 'column', gap: 32, overflowY: 'auto',
         }}>
           <div>
-            <div style={{ fontSize: 10, letterSpacing: '0.16em', color: 'var(--text-muted)', textTransform: 'uppercase', fontFamily: 'var(--font-body)', marginBottom: 8 }}>
+            <div style={{
+              fontSize: 10, letterSpacing: '0.16em', color: 'var(--text-secondary)',
+              textTransform: 'uppercase', fontFamily: 'var(--font-body)', marginBottom: 8,
+              borderLeft: '2px solid rgba(201,168,76,0.45)', paddingLeft: 8,
+            }}>
               Your Configuration
             </div>
             <div style={{ fontFamily: 'var(--font-heading)', fontSize: 20, fontWeight: 300, color: 'var(--text-primary)', marginBottom: 4 }}>
@@ -179,8 +184,8 @@ export function ConfiguratorLayout() {
           <div style={{ marginTop: 'auto', paddingTop: 16 }}>
             {['30-day returns', 'Lifetime resizing', 'Certificate of authenticity', 'Free insured shipping'].map((item) => (
               <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <div style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--gold)', opacity: 0.6, flexShrink: 0 }} />
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-body)', letterSpacing: '0.04em' }}>{item}</span>
+                <span style={{ color: 'rgba(201,168,76,0.6)', fontSize: 10, flexShrink: 0, lineHeight: 1 }}>—</span>
+                <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-body)', letterSpacing: '0.04em' }}>{item}</span>
               </div>
             ))}
           </div>

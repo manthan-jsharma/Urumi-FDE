@@ -69,15 +69,19 @@ export function FinalCTA() {
     cacheBtnRect()
     window.addEventListener('resize', cacheBtnRect)
 
-    // Magnetic button
+    // Magnetic button — quickTo avoids creating a new tween on every mousemove
+    const btn = magnetRef.current
+    const qtX = btn ? gsap.quickTo(btn, 'x', { duration: 0.4, ease: 'power2.out' }) : null
+    const qtY = btn ? gsap.quickTo(btn, 'y', { duration: 0.4, ease: 'power2.out' }) : null
+
     function onMouseMove(e: MouseEvent) {
-      const btn = magnetRef.current
-      if (!btn || !btnRect) return
+      if (!qtX || !qtY || !btnRect) return
       const { bx, by } = btnRect
-      const dist = Math.sqrt((e.clientX - bx) ** 2 + (e.clientY - by) ** 2)
+      const dist = Math.hypot(e.clientX - bx, e.clientY - by)
 
       if (dist < 100) {
-        gsap.to(btn, { x: (e.clientX - bx) * 0.3, y: (e.clientY - by) * 0.3, duration: 0.4, ease: 'power2.out' })
+        qtX((e.clientX - bx) * 0.3)
+        qtY((e.clientY - by) * 0.3)
       } else {
         gsap.to(btn, { x: 0, y: 0, duration: 0.6, ease: 'elastic.out(1, 0.4)' })
       }
@@ -112,13 +116,13 @@ export function FinalCTA() {
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
         <Canvas
           camera={{ position: [0, 0.2, 2.6], fov: 40 }}
-          gl={{ antialias: true, alpha: false, toneMapping: 4, toneMappingExposure: 1.4 }}
+          gl={{ antialias: true, alpha: false, toneMapping: 4, toneMappingExposure: 1.1 }}
           dpr={[1, 1.2]}
           frameloop={inView ? 'always' : 'demand'}
         >
           <color attach="background" args={['#0a0a0a']} />
           <Suspense fallback={null}>
-            <LightTentEnvironment />
+            <LightTentEnvironment delay={2000} />
             <ambientLight intensity={0.06} />
             <spotLight position={[0, 4.5, 1.5]}    intensity={220} angle={0.12} penumbra={0.25} color="#ffffff"  castShadow={false} />
             <spotLight position={[-1.4, 2.5, 2.2]}  intensity={90}  angle={0.24} penumbra={0.5}  color="#cce4ff" castShadow={false} />
@@ -129,8 +133,8 @@ export function FinalCTA() {
               autoRotate
               metalKey="18k-yellow"
               rotateSpeed={0.38}
-              stoneEnvIntensity={7}
-              stoneTransmission={0.82}
+              stoneEnvIntensity={6}
+              stoneTransmission={0.88}
             />
           </Suspense>
         </Canvas>

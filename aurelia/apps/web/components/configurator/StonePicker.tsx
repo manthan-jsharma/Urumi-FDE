@@ -170,6 +170,7 @@ function FlatStoneThumb({
       <span style={{
         fontSize: 10, letterSpacing: '0.08em',
         color: selected ? 'var(--gold)' : 'var(--text-secondary)',
+
         textTransform: 'uppercase', fontFamily: 'var(--font-body)',
         transition: 'color 0.3s ease',
       }}>
@@ -197,8 +198,9 @@ export function StonePicker() {
     }}>
 
       <div style={{
-        fontSize: 10, letterSpacing: '0.18em', color: 'var(--text-muted)',
+        fontSize: 10, letterSpacing: '0.18em', color: 'var(--text-secondary)',
         textTransform: 'uppercase', fontFamily: 'var(--font-body)', marginBottom: 24,
+        borderLeft: '2px solid rgba(201,168,76,0.45)', paddingLeft: 8,
       }}>
         Shape
       </div>

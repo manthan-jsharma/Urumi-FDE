@@ -7,11 +7,11 @@
 
 import { useRef, useState, useEffect, Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { Environment, ContactShadows } from '@react-three/drei'
+import { ContactShadows } from '@react-three/drei'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { RingMesh } from '@/components/three/RingMesh'
-import { PostFX } from '@/components/three/PostFX'
+import { LightTentEnvironment } from '@/components/three/LightTentEnvironment'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -39,24 +39,38 @@ const PANELS = [
 export function MetalsTeaser() {
   const sectionRef = useRef<HTMLDivElement>(null)
   const [currentMetal, setCurrentMetal] = useState('14k-white')
+  const [inView, setInView] = useState(false)
   const panelRefs = useRef<(HTMLDivElement | null)[]>([])
 
   useEffect(() => {
     const section = sectionRef.current
     if (!section) return
+    const io = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { threshold: 0 },
+    )
+    io.observe(section)
+    return () => io.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const section = sectionRef.current
+    if (!section) return
+
+    const triggers: ReturnType<typeof ScrollTrigger.create>[] = []
 
     panelRefs.current.forEach((panel, i) => {
       if (!panel) return
-      ScrollTrigger.create({
+      triggers.push(ScrollTrigger.create({
         trigger: panel,
         start: 'top center',
         end: 'bottom center',
         onEnter: () => setCurrentMetal(PANELS[i].metal),
         onEnterBack: () => setCurrentMetal(PANELS[i].metal),
-      })
+      }))
     })
 
-    return () => ScrollTrigger.getAll().forEach((t) => t.kill())
+    return () => triggers.forEach((t) => t.kill())
   }, [])
 
   return (
@@ -74,17 +88,22 @@ export function MetalsTeaser() {
           pointerEvents: 'none',
           zIndex: 1,
         }}>
+          {/* CSS vignette — zero GPU overhead vs EffectComposer */}
+          <div style={{
+            position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 2,
+            background: 'radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(10,10,10,0.6) 100%)',
+          }} />
           <Canvas
             camera={{ position: [0, 0.3, 3.5], fov: 38 }}
             gl={{ antialias: true, alpha: false }}
-            dpr={[1, 2]}
+            dpr={[1, 1.5]}
+            frameloop={inView ? 'always' : 'demand'}
           >
             <color attach="background" args={['#0a0a0a']} />
             <Suspense fallback={null}>
-              <Environment preset="studio" />
+              <LightTentEnvironment delay={3000} />
               <RingMesh autoRotate metalKey={currentMetal} />
-              <ContactShadows position={[0, -1.1, 0]} opacity={0.45} blur={2} scale={3} />
-              <PostFX vignette={0.5} />
+              <ContactShadows position={[0, -1.1, 0]} opacity={0.45} blur={2} scale={3} frames={1} />
             </Suspense>
           </Canvas>
         </div>

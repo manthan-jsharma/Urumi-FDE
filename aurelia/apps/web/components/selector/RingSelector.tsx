@@ -2,10 +2,12 @@
 
 import { useState, useRef, Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { Environment, ContactShadows } from '@react-three/drei'
+import { ContactShadows } from '@react-three/drei'
 import { motion, AnimatePresence } from 'framer-motion'
 import gsap from 'gsap'
 import { RingMesh } from '@/components/three/RingMesh'
+import { LightTentEnvironment } from '@/components/three/LightTentEnvironment'
+import { RingLoader } from '@/components/ui/RingLoader'
 import { useNavigate as usePageNavigate } from '@/components/ui/PageTransition'
 import Link from 'next/link'
 
@@ -38,9 +40,10 @@ const RING_STYLES = [
 
 export function RingSelector() {
   const goToPage  = usePageNavigate()
-  const [index,   setIndex]   = useState(0)
-  const [variant, setVariant] = useState(0)
-  const [visible, setVisible] = useState(true)
+  const [index,    setIndex]    = useState(0)
+  const [variant,  setVariant]  = useState(0)
+  const [visible,  setVisible]  = useState(true)
+  const [isLoaded, setIsLoaded] = useState(false)
   const ringWrapRef           = useRef<HTMLDivElement>(null)
 
   const current = RING_STYLES[index]
@@ -107,18 +110,18 @@ export function RingSelector() {
         pointerEvents: 'none',
       }}>
         <Link href="/" data-cursor-hover style={{
-          fontSize: 11, letterSpacing: '0.14em', color: 'var(--text-muted)',
+          fontSize: 11, letterSpacing: '0.14em', color: 'var(--text-secondary)',
           textTransform: 'uppercase', fontFamily: 'var(--font-body)',
           textDecoration: 'none', transition: 'color 0.3s ease',
-          pointerEvents: 'all',
+          pointerEvents: 'all', display: 'flex', alignItems: 'center', gap: 7,
         }}
-          onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
-          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+          onMouseEnter={e => (e.currentTarget.style.color = 'var(--gold)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
         >
-          ← Back
+          <span style={{ color: 'var(--gold)', opacity: 0.7, fontSize: 13 }}>←</span> Back
         </Link>
         <div style={{
-          fontSize: 11, letterSpacing: '0.22em', color: '#333',
+          fontSize: 11, letterSpacing: '0.22em', color: 'var(--text-muted)',
           fontFamily: 'var(--font-body)', fontVariantNumeric: 'tabular-nums',
         }}>
           {String(index + 1).padStart(2, '0')} / {String(RING_STYLES.length).padStart(2, '0')}
@@ -211,13 +214,25 @@ export function RingSelector() {
           }} />
           <Canvas
             camera={{ position: [0, 0.2, 3.8], fov: 38 }}
-            gl={{ antialias: true, alpha: true }}
+            gl={{ antialias: true, alpha: true, toneMapping: 4, toneMappingExposure: 1.1 }}
             dpr={[1, 2]}
             style={{ background: 'transparent' }}
           >
             <Suspense fallback={null}>
-              <Environment preset="studio" />
-              <RingMesh autoRotate metalKey={current.metal} stoneKey={current.stones[variant]} />
+              <LightTentEnvironment transparent={true} />
+              <ambientLight intensity={0.04} />
+              <spotLight position={[0.3, 5.5, 2]}   intensity={260} angle={0.09} penumbra={0.15} color="#ffffff"  castShadow={false} />
+              <spotLight position={[-1.8, 3, 2.5]}  intensity={55}  angle={0.2}  penumbra={0.8}  color="#bbd4ff" castShadow={false} />
+              <spotLight position={[1.8, 3, 2.5]}   intensity={55}  angle={0.2}  penumbra={0.8}  color="#ffd8a0" castShadow={false} />
+              <pointLight position={[0, -0.5, -1.5]} intensity={14} color="#f0f8ff" />
+              <RingMesh
+                autoRotate
+                metalKey={current.metal}
+                stoneKey={current.stones[variant]}
+                stoneEnvIntensity={6}
+                stoneTransmission={0.88}
+                onReady={() => setIsLoaded(true)}
+              />
               <ContactShadows position={[0, -1.2, 0]} opacity={0.3} blur={2.5} scale={4} />
             </Suspense>
           </Canvas>
@@ -376,6 +391,7 @@ export function RingSelector() {
         </motion.div>
       </AnimatePresence>
 
+      <RingLoader isLoaded={isLoaded} />
     </div>
   )
 }

@@ -77,7 +77,7 @@ export function Ring3DView() {
           <Suspense fallback={null}>
             <LightTentEnvironment />
             <CameraIntro />
-            <RingMesh metalKey={metal} autoRotate stoneEnvIntensity={5.5} stoneTransmission={0.88} />
+            <RingMesh metalKey={metal} autoRotate stoneEnvIntensity={5.5} stoneTransmission={0} />
             <spotLight position={[5, 8, 3]} intensity={2.5} angle={0.35} penumbra={0.8} castShadow />
             <ambientLight intensity={0.12} />
             <ContactShadows position={[0, -1.0, 0]} opacity={0.5} blur={3} scale={4} />

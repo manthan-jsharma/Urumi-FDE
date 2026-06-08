@@ -1,9 +1,21 @@
 'use client'
 
 import { useEffect } from 'react'
+import { usePathname } from 'next/navigation'
+
+const NO_CURSOR_ROUTES = ['/configure']
 
 export function CustomCursor() {
+  const pathname = usePathname()
+  const disabled = NO_CURSOR_ROUTES.some(r => pathname.startsWith(r))
+
   useEffect(() => {
+    if (disabled) {
+      document.body.classList.remove('custom-cursor')
+      return
+    }
+    document.body.classList.add('custom-cursor')
+
     const dot = document.createElement('div')
     Object.assign(dot.style, {
       position: 'fixed',
@@ -68,8 +80,9 @@ export function CustomCursor() {
       cancelAnimationFrame(raf)
       if (dot.parentNode) dot.parentNode.removeChild(dot)
       if (ring.parentNode) ring.parentNode.removeChild(ring)
+      document.body.classList.remove('custom-cursor')
     }
-  }, [])
+  }, [disabled])
 
   // Nothing in the React tree — all DOM work is imperative
   return null

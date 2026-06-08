@@ -522,6 +522,24 @@ export function HorizontalFeatures() {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const trackRef   = useRef<HTMLDivElement>(null)
 
+  // Pause all 44 SMIL animations when section is off-screen.
+  // Without this, they saturate the browser rendering pipeline (79% Rendering in profile)
+  // even while the Hero ring is visible, causing periodic 2-second hangs.
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    if (!wrapper) return
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        wrapper.querySelectorAll('svg').forEach(svg => {
+          entry.isIntersecting ? svg.unpauseAnimations() : svg.pauseAnimations()
+        })
+      },
+      { threshold: 0 },
+    )
+    io.observe(wrapper)
+    return () => io.disconnect()
+  }, [])
+
   useEffect(() => {
     const wrapper = wrapperRef.current
     const track   = trackRef.current
@@ -533,8 +551,7 @@ export function HorizontalFeatures() {
       scrollTrigger: {
         trigger: wrapper,
         pin: true,
-        anticipatePin: 1,
-        scrub: 0.3,
+        scrub: true,
         end: () => `+=${track.scrollWidth - window.innerWidth}`,
         invalidateOnRefresh: true,
       },

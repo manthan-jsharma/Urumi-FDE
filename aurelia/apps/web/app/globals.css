@@ -11,8 +11,8 @@
   --dark-elevated: #161616;
   --dark-border: #1f1f1f;
   --text-primary: #f0ede8;
-  --text-secondary: #888880;
-  --text-muted: #444440;
+  --text-secondary: #9a9690;
+  --text-muted: #706f6b;
   --font-heading: var(--font-cormorant), Georgia, serif;
   --font-body: var(--font-inter), system-ui, sans-serif;
 }
@@ -47,7 +47,7 @@ h1, h2, h3, h4 {
   letter-spacing: 0.02em;
 }
 
-*, *::before, *::after {
+.custom-cursor *, .custom-cursor *::before, .custom-cursor *::after {
   cursor: none !important;
 }
 

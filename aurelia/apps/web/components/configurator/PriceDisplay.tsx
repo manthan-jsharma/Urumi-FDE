@@ -22,7 +22,7 @@ export function PriceDisplay() {
       <div style={{
         fontSize: 10,
         letterSpacing: '0.16em',
-        color: 'var(--text-muted)',
+        color: 'rgba(201,168,76,0.7)',
         textTransform: 'uppercase',
         fontFamily: 'var(--font-body)',
         marginBottom: 8,
@@ -51,11 +51,11 @@ export function PriceDisplay() {
 
       <div style={{
         fontSize: 12,
-        color: 'var(--text-muted)',
+        color: 'var(--text-secondary)',
         fontFamily: 'var(--font-body)',
         letterSpacing: '0.04em',
       }}>
-        Setting only · Stone not included
+        Setting only — Stone not included
       </div>
     </div>
   )

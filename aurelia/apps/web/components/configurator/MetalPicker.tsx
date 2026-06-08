@@ -74,14 +74,14 @@ export function MetalPicker() {
       onMouseEnter={e => {
         e.currentTarget.style.borderColor = 'rgba(201,168,76,0.5)'
         e.currentTarget.style.background  = 'rgba(20,16,10,0.95)'
-        ;(e.currentTarget.querySelector('.toggle-label')   as HTMLElement).style.color = 'rgba(201,168,76,0.9)'
-        ;(e.currentTarget.querySelector('.toggle-chevron') as HTMLElement).style.color = 'rgba(201,168,76,0.9)'
+        ;(e.currentTarget.querySelector('.toggle-label')   as HTMLElement).style.color = 'rgba(201,168,76,1.0)'
+        ;(e.currentTarget.querySelector('.toggle-chevron') as HTMLElement).style.color = 'rgba(201,168,76,1.0)'
       }}
       onMouseLeave={e => {
         e.currentTarget.style.borderColor = 'rgba(201,168,76,0.22)'
         e.currentTarget.style.background  = 'rgba(12,10,8,0.88)'
-        ;(e.currentTarget.querySelector('.toggle-label')   as HTMLElement).style.color = 'rgba(201,168,76,0.55)'
-        ;(e.currentTarget.querySelector('.toggle-chevron') as HTMLElement).style.color = 'rgba(201,168,76,0.45)'
+        ;(e.currentTarget.querySelector('.toggle-label')   as HTMLElement).style.color = 'rgba(201,168,76,0.80)'
+        ;(e.currentTarget.querySelector('.toggle-chevron') as HTMLElement).style.color = 'rgba(201,168,76,0.80)'
       }}
       style={{
         position: 'absolute',
@@ -107,7 +107,7 @@ export function MetalPicker() {
       <span
         className="toggle-label"
         style={{
-          fontSize: 9, letterSpacing: '0.22em', color: 'rgba(201,168,76,0.55)',
+          fontSize: 9, letterSpacing: '0.22em', color: 'rgba(201,168,76,0.80)',
           textTransform: 'uppercase', fontFamily: 'var(--font-body)',
           transition: 'color 0.2s', whiteSpace: 'nowrap',
         }}
@@ -120,7 +120,7 @@ export function MetalPicker() {
         transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
         style={{
           display: 'block', fontSize: 10,
-          color: 'rgba(201,168,76,0.45)',
+          color: 'rgba(201,168,76,0.80)',
           lineHeight: 1, flexShrink: 0,
           transition: 'color 0.2s',
         }}
