@@ -27,6 +27,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${cormorant.variable} ${inter.variable}`}>
+      <head>
+        {/* Preload heavy 3D assets — browser fetches in parallel with JS bundle */}
+        <link rel="preload" href="/models/ring-parts.glb" as="fetch" crossOrigin="anonymous" />
+        <link rel="preload" href="/models/stones.glb"     as="fetch" crossOrigin="anonymous" />
+      </head>
       <body suppressHydrationWarning>
         <CustomCursor />
         <PageTransitionProvider>

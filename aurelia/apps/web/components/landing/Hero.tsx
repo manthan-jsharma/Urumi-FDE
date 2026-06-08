@@ -64,6 +64,13 @@ export function Hero({ onReady }: { onReady?: () => void }) {
   // Initial camera: centred — no x offset so ring never drifts on first scroll
   const cameraTarget = useRef({ x: 0, y: 0.1, z: 4.2, lookAtY: 0.1 });
 
+  // Delay Canvas mount so the loader paints before WebGL init begins
+  const [canvasMounted, setCanvasMounted] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setCanvasMounted(true), 120);
+    return () => clearTimeout(id);
+  }, []);
+
   // Pause canvas rendering when section scrolls out of view — prevents GPU drain
   // from two simultaneous WebGL scenes (Hero + FinalCTA both at 60fps).
   const [canvasActive, setCanvasActive] = useState(true);
@@ -496,6 +503,7 @@ export function Hero({ onReady }: { onReady?: () => void }) {
             opacity: 0,
           }}
         >
+          {!canvasMounted && null}
           {/* Dark Velvet atmosphere — stacked CSS layers over the canvas */}
           {/* Stone spotlight — tight cone on center stone, scroll-driven Phase 4 */}
           <div
@@ -544,7 +552,7 @@ export function Hero({ onReady }: { onReady?: () => void }) {
                 "radial-gradient(ellipse 38% 30% at 50% 50%, rgba(130,62,0,0.18) 0%, transparent 100%)",
             }}
           />
-          <Canvas
+          {canvasMounted && <Canvas
             camera={{ position: [0, 0.1, 4.2], fov: 35 }}
             gl={{
               antialias: true,
@@ -630,7 +638,7 @@ export function Hero({ onReady }: { onReady?: () => void }) {
               />
             </Suspense>
             <CameraRig target={cameraTarget} />
-          </Canvas>
+          </Canvas>}
         </div>
 
         {/* ── Move 2: Left reveal — "CRAFTED IN" + heading ─────────── */}

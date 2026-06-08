@@ -169,14 +169,6 @@ export function RingLoader({ isLoaded }: { isLoaded: boolean }) {
         </div>
       </div>
 
-      {/* Keyframe for the drawing arc — injected once */}
-      <style>{`
-        @keyframes loaderDraw {
-          0%   { stroke-dashoffset: ${CIRCUMFERENCE}; }
-          60%  { stroke-dashoffset: 0; }
-          100% { stroke-dashoffset: -${CIRCUMFERENCE}; }
-        }
-      `}</style>
     </div>
   )
 }

@@ -73,6 +73,12 @@ canvas {
   animation-play-state: paused;
 }
 
+@keyframes loaderDraw {
+  0%   { stroke-dashoffset: 175.93; }
+  60%  { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -175.93; }
+}
+
 @keyframes sparkle {
   0%, 100% { filter: brightness(1); }
   50%       { filter: brightness(1.5) saturate(1.3); }
