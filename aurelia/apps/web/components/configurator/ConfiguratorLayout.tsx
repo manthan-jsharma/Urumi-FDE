@@ -1,6 +1,7 @@
 'use client'
 
-import { Suspense, useEffect } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
 import { Canvas } from '@react-three/fiber'
 import { ContactShadows, OrbitControls } from '@react-three/drei'
 import Link from 'next/link'
@@ -16,6 +17,15 @@ import { MetalPicker } from '@/components/configurator/MetalPicker'
 import { PriceDisplay } from '@/components/configurator/PriceDisplay'
 import { AddToCart } from '@/components/configurator/AddToCart'
 import { CartDrawer } from '@/components/ui/CartDrawer'
+import { RingLoader } from '@/components/ui/RingLoader'
+
+const NOISE_URL = `url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='grain'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/></filter><rect width='200' height='200' filter='url(%23grain)'/></svg>")`
+
+const panelItem = (delay: number, loaded: boolean) => ({
+  initial: { opacity: 0, y: 12 },
+  animate: loaded ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 },
+  transition: { duration: 0.55, ease: [0.16, 1, 0.3, 1] as const, delay },
+})
 
 // ── Pedestal ───────────────────────────────────────────────────────────────
 // Thin glass disc the ring floats above — clear acrylic display-stand look.
@@ -44,7 +54,7 @@ function Pedestal() {
   )
 }
 
-function RingScene() {
+function RingScene({ onReady }: { onReady: () => void }) {
   const metal = useConfigStore((s) => s.metal)
   const stone = useConfigStore((s) => s.stone)
   const showCallout = useConfigStore((s) => s.showCallout)
@@ -56,19 +66,19 @@ function RingScene() {
     <Canvas
       camera={{ position: [0, 0.5, 3.5], fov: 40 }}
       gl={{ antialias: true, alpha: false, toneMapping: 4, toneMappingExposure: 0.72 }}
-      dpr={[1, 2]}
+      dpr={[1, 1.5]}
       shadows
     >
       <color attach="background" args={['#0d0d0d']} />
       <Suspense fallback={null}>
-        <LightTentEnvironment />
+        <LightTentEnvironment delay={600} />
         <spotLight position={[5, 8, 3]} intensity={2.5} angle={0.35} penumbra={0.8} castShadow shadow-mapSize={[1024, 1024]} />
         <ambientLight intensity={0.12} />
-        <RingMesh metalKey={metal} stoneKey={stone} autoRotate={!userInteracting} />
+        <RingMesh metalKey={metal} stoneKey={stone} autoRotate={!userInteracting} onReady={onReady} />
         <Pedestal />
         <ContactShadows position={[0, -0.92, 0]} opacity={0.5} scale={2.8} blur={2} far={1.0} />
         <FloatingCallout metal={metal} stone={stone} visible={showCallout} />
-        <PostFX vignette={0.5} bloom dofFocusDistance={3.5} dofFocusRange={1.2} dofBokeh={0.5} dof />
+        <PostFX vignette={0.5} bloom dofFocusDistance={3.5} dofFocusRange={1.2} dofBokeh={0.35} dof />
       </Suspense>
       <OrbitControls
         enablePan={false}
@@ -87,6 +97,7 @@ function RingScene() {
 }
 
 export function ConfiguratorLayout() {
+  const [isLoaded, setIsLoaded] = useState(false)
   const metal = useConfigStore((s) => s.metal)
   const stone = useConfigStore((s) => s.stone)
   const setMetal = useConfigStore((s) => s.setMetal)
@@ -155,14 +166,22 @@ export function ConfiguratorLayout() {
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <StonePicker />
         <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
-          <RingScene />
+          <RingScene onReady={() => setIsLoaded(true)} />
           <MetalPicker />
         </div>
         <div style={{
           width: 300, flexShrink: 0, borderLeft: '1px solid #181818',
-          padding: '40px 32px', display: 'flex', flexDirection: 'column', gap: 32, overflowY: 'auto',
+          padding: '40px 32px', display: 'flex', flexDirection: 'column', gap: 32,
+          overflowY: 'auto', position: 'relative',
         }}>
-          <div>
+          {/* Grain texture overlay */}
+          <div aria-hidden="true" style={{
+            position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10,
+            backgroundImage: NOISE_URL, backgroundRepeat: 'repeat', backgroundSize: '180px 180px',
+            opacity: 0.04,
+          }} />
+
+          <motion.div {...panelItem(0, isLoaded)}>
             <div style={{
               fontSize: 10, letterSpacing: '0.16em', color: 'var(--text-secondary)',
               textTransform: 'uppercase', fontFamily: 'var(--font-body)', marginBottom: 8,
@@ -176,23 +195,29 @@ export function ConfiguratorLayout() {
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'var(--font-body)' }}>
               {STONE_CONFIGS[stone]?.label} Diamond
             </div>
-          </div>
-          <div className="rule-gold" />
-          <PriceDisplay />
-          <div className="rule-gold" />
-          <AddToCart />
-          <div style={{ marginTop: 'auto', paddingTop: 16 }}>
+          </motion.div>
+
+          <motion.div {...panelItem(0.08, isLoaded)}><div className="rule-gold" /></motion.div>
+
+          <motion.div {...panelItem(0.16, isLoaded)}><PriceDisplay /></motion.div>
+
+          <motion.div {...panelItem(0.24, isLoaded)}><div className="rule-gold" /></motion.div>
+
+          <motion.div {...panelItem(0.32, isLoaded)}><AddToCart /></motion.div>
+
+          <motion.div {...panelItem(0.40, isLoaded)} style={{ marginTop: 'auto', paddingTop: 16 }}>
             {['30-day returns', 'Lifetime resizing', 'Certificate of authenticity', 'Free insured shipping'].map((item) => (
               <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                 <span style={{ color: 'rgba(201,168,76,0.6)', fontSize: 10, flexShrink: 0, lineHeight: 1 }}>—</span>
                 <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-body)', letterSpacing: '0.04em' }}>{item}</span>
               </div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </div>
 
       <CartDrawer />
+      <RingLoader isLoaded={isLoaded} />
     </div>
   )
 }

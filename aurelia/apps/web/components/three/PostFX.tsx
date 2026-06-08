@@ -31,14 +31,12 @@ export function PostFX({
 }: PostFXProps) {
   return (
     <EffectComposer>
-      {dof && (
-        <DepthOfField
-          worldFocusDistance={dofFocusDistance}
-          worldFocusRange={dofFocusRange}
-          bokehScale={dofBokeh}
-          height={480}
-        />
-      )}
+      <DepthOfField
+        worldFocusDistance={dofFocusDistance}
+        worldFocusRange={dofFocusRange}
+        bokehScale={dof ? dofBokeh : 0}
+        height={360}
+      />
 
       {/* Bloom: intensity=0 when disabled → pass-through */}
       <Bloom

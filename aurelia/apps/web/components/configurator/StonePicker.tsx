@@ -7,8 +7,21 @@ import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import { motion, AnimatePresence } from 'framer-motion'
 import { STONE_CONFIGS } from '@/lib/materials'
 import { useConfigStore } from '@/lib/store'
-import { StoneThumb, StoneGeometry, DarkBackground } from '@/components/three/StoneThumb'
+import { StoneThumb, StoneGeometry, Crystal } from '@/components/three/StoneThumb'
 import { LightTentEnvironment } from '@/components/three/LightTentEnvironment'
+
+const NOISE_URL = `url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='grain'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/></filter><rect width='200' height='200' filter='url(%23grain)'/></svg>")`
+
+// 7 crystals sized for the 210×180 preview popup canvas
+const CRYSTAL_CONFIG = [
+  { x: -1.4, y:  0.6, z: -1.8, s: 0.055, rs: 0.55, fp: 0.00 },
+  { x:  1.5, y:  0.3, z: -2.0, s: 0.040, rs: 0.80, fp: 1.10 },
+  { x: -0.8, y: -0.8, z: -2.2, s: 0.070, rs: 0.45, fp: 2.20 },
+  { x:  0.9, y:  0.9, z: -2.5, s: 0.035, rs: 1.00, fp: 0.80 },
+  { x:  1.8, y: -0.5, z: -1.6, s: 0.050, rs: 0.65, fp: 1.70 },
+  { x: -1.7, y: -0.3, z: -2.3, s: 0.045, rs: 0.90, fp: 3.00 },
+  { x:  0.3, y:  1.1, z: -2.8, s: 0.030, rs: 0.70, fp: 0.50 },
+]
 
 const SHAPES_3D   = ['round', 'oval', 'princess', 'cushion', 'marquise', 'pear'] as const
 const SHAPES_FLAT = ['emerald', 'radiant', 'asscher', 'heart'] as const
@@ -30,10 +43,14 @@ function StonePreview({ shape, y }: { shape: string; y: number }) {
         top: y,
         transform: 'translateY(-50%)',
         width: 210,
-        background: '#0a0a0a',
-        border: '1px solid rgba(201, 168, 76, 0.22)',
+        background: 'rgba(4, 14, 8, 0.90)',
+        backdropFilter: 'blur(32px)',
+        WebkitBackdropFilter: 'blur(32px)',
+        border: '1px solid rgba(60, 140, 85, 0.22)',
+        boxShadow: '0 8px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(100,200,130,0.06)',
         zIndex: 200,
         pointerEvents: 'none',
+        overflow: 'hidden',
       }}
     >
       {/* Gold corner accents */}
@@ -43,33 +60,37 @@ function StonePreview({ shape, y }: { shape: string; y: number }) {
         { bottom: 0, left: 0, borderBottom: '1px solid var(--gold)', borderLeft: '1px solid var(--gold)' },
         { bottom: 0, right: 0, borderBottom: '1px solid var(--gold)', borderRight: '1px solid var(--gold)' },
       ].map((s, i) => (
-        <div key={i} style={{ position: 'absolute', width: 10, height: 10, ...s }} />
+        <div key={i} style={{ position: 'absolute', width: 10, height: 10, ...s, zIndex: 2 }} />
       ))}
 
       {/* 3D canvas */}
-      <div style={{ width: '100%', height: 180, background: 'transparent' }}>
+      <div style={{
+        width: '100%', height: 180, position: 'relative',
+        background: 'linear-gradient(145deg, rgba(22,72,40,0.52) 0%, rgba(6,28,14,0.72) 100%)',
+      }}>
+        {/* Inner glass highlight — top-left shimmer */}
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1,
+          background: 'radial-gradient(ellipse at 25% 15%, rgba(140,230,170,0.10) 0%, transparent 55%)',
+        }} />
         <Canvas
           camera={{ position: [0, 0.3, 2.4], fov: 40 }}
-          gl={{ antialias: true, alpha: true, toneMapping: 4 }}
+          gl={{ antialias: true, alpha: true, toneMapping: 4, toneMappingExposure: 1.0 }}
+          style={{ background: 'transparent' }}
           dpr={[1, 2]}
         >
           <Suspense fallback={null}>
-            <LightTentEnvironment transparent={false} />
-            <DarkBackground color="#050e08" />
-            <spotLight position={[2, 5, 2.5]} intensity={14} angle={0.13} penumbra={0.04} color="#ffffff" />
+            <LightTentEnvironment transparent={true} />
+            <spotLight position={[2, 5, 2.5]}     intensity={14} angle={0.13} penumbra={0.04} color="#ffffff" />
             <spotLight position={[-2.5, 3.5, 1.5]} intensity={10} angle={0.16} penumbra={0.06} color="#ffffff" />
-            <spotLight position={[0.3, 7, 0.5]} intensity={12} angle={0.11} penumbra={0.03} color="#ffffff" />
-            <spotLight position={[0, 1, 4]} intensity={8} angle={0.18} penumbra={0.06} color="#ffffff" />
-            <ambientLight intensity={0.03} />
+            <spotLight position={[0.3, 7, 0.5]}   intensity={12} angle={0.11} penumbra={0.03} color="#ffffff" />
+            <spotLight position={[0, 1, 4]}         intensity={8}  angle={0.18} penumbra={0.06} color="#ffffff" />
+            <ambientLight intensity={0.06} />
+            {CRYSTAL_CONFIG.map((c, i) => <Crystal key={i} {...c} />)}
             <StoneGeometry shape={shape as any} />
-            <OrbitControls
-              enableZoom={false}
-              enablePan={false}
-              autoRotate
-              autoRotateSpeed={6}
-            />
+            <OrbitControls enableZoom={false} enablePan={false} autoRotate autoRotateSpeed={6} />
             <EffectComposer>
-              <Bloom luminanceThreshold={0.8} luminanceSmoothing={0.05} intensity={0.6} mipmapBlur />
+              <Bloom luminanceThreshold={0.7} luminanceSmoothing={0.05} intensity={0.8} mipmapBlur />
             </EffectComposer>
           </Suspense>
         </Canvas>
@@ -77,7 +98,7 @@ function StonePreview({ shape, y }: { shape: string; y: number }) {
 
       {/* Label */}
       <div style={{
-        borderTop: '1px solid #181818',
+        borderTop: '1px solid rgba(80,180,110,0.12)',
         padding: '10px 14px',
         display: 'flex',
         alignItems: 'center',
@@ -184,8 +205,9 @@ export function StonePicker() {
   const currentStone = useConfigStore((s) => s.stone)
   const setStone     = useConfigStore((s) => s.setStone)
 
-  const [hoveredStone, setHoveredStone] = useState<string | null>(null)
-  const [hoverY,       setHoverY]       = useState(0)
+  const [hoveredStone,  setHoveredStone]  = useState<string | null>(null)
+  const [hoverY,        setHoverY]        = useState(0)
+  const [moreOpen,      setMoreOpen]      = useState(false)
 
   return (
     <div style={{
@@ -196,6 +218,12 @@ export function StonePicker() {
       height: '100%',
       position: 'relative',
     }}>
+      {/* Grain texture overlay */}
+      <div aria-hidden="true" style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10,
+        backgroundImage: NOISE_URL, backgroundRepeat: 'repeat', backgroundSize: '180px 180px',
+        opacity: 0.04,
+      }} />
 
       <div style={{
         fontSize: 10, letterSpacing: '0.18em', color: 'var(--text-secondary)',
@@ -226,23 +254,58 @@ export function StonePicker() {
         ))}
       </div>
 
-      {/* Divider */}
-      <div style={{ height: 1, background: '#181818', margin: '16px 0' }} />
+      {/* More Stones toggle */}
+      <button
+        data-cursor-hover
+        onClick={() => setMoreOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          background: 'none', border: '1px solid #222',
+          padding: '7px 12px', width: '100%',
+          color: moreOpen ? 'var(--gold)' : 'var(--text-secondary)',
+          fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase',
+          fontFamily: 'var(--font-body)', transition: 'color 0.2s, border-color 0.2s',
+          marginTop: 4,
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(201,168,76,0.4)'; e.currentTarget.style.color = 'var(--gold)' }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = '#222'; e.currentTarget.style.color = moreOpen ? 'var(--gold)' : 'var(--text-secondary)' }}
+      >
+        <motion.span
+          animate={{ rotate: moreOpen ? 45 : 0 }}
+          transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+          style={{ display: 'block', fontSize: 14, lineHeight: 1, color: 'rgba(201,168,76,0.6)' }}
+        >
+          +
+        </motion.span>
+        {moreOpen ? 'Less Stones' : 'More Stones'}
+      </button>
 
-      {/* Flat stone thumbnails */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 72px)', gap: 12 }}>
-        {SHAPES_FLAT.map((shape) => (
-          <FlatStoneThumb
-            key={shape}
-            shape={shape}
-            selected={currentStone === shape}
-            label={STONE_CONFIGS[shape].label}
-            onClick={() => setStone(shape)}
-            onMouseEnter={(y) => { setHoveredStone(shape); setHoverY(y) }}
-            onMouseLeave={() => setHoveredStone(null)}
-          />
-        ))}
-      </div>
+      {/* Flat stone thumbnails — revealed on toggle */}
+      <AnimatePresence>
+        {moreOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 72px)', gap: 12, paddingTop: 14 }}>
+              {SHAPES_FLAT.map((shape) => (
+                <FlatStoneThumb
+                  key={shape}
+                  shape={shape}
+                  selected={currentStone === shape}
+                  label={STONE_CONFIGS[shape].label}
+                  onClick={() => setStone(shape)}
+                  onMouseEnter={(y) => { setHoveredStone(shape); setHoverY(y) }}
+                  onMouseLeave={() => setHoveredStone(null)}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Floating 3D preview — portal-like, fixed to viewport */}
       <AnimatePresence>

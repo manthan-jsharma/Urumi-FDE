@@ -56,6 +56,7 @@ export function Hero({ onReady }: { onReady?: () => void }) {
   const revealSpecsRef = useRef<HTMLDivElement>(null); // phase 2 right specs
   const revealStoneRef = useRef<HTMLDivElement>(null); // phase 3 bottom-right
   const revealBeginRef = useRef<HTMLDivElement>(null); // phase 4 "Begin Configuration"
+  const spotlightRef   = useRef<HTMLDivElement>(null); // phase 4 stone spotlight
 
   const mouseRef = useRef({ x: 0, y: 0 });
   const magnetRef = useRef<HTMLButtonElement>(null);
@@ -156,15 +157,16 @@ export function Hero({ onReady }: { onReady?: () => void }) {
     const qsRS_y = gsap.quickSetter(revealSpecsRef.current!, "y", "px");
     const qsRSt_op = gsap.quickSetter(revealStoneRef.current!, "opacity");
     const qsRSt_y = gsap.quickSetter(revealStoneRef.current!, "y", "px");
-    const qsRB_op = gsap.quickSetter(revealBeginRef.current!, "opacity");
-    const qsRB_y = gsap.quickSetter(revealBeginRef.current!, "y", "px");
+    const qsRB_op   = gsap.quickSetter(revealBeginRef.current!, "opacity");
+    const qsRB_y    = gsap.quickSetter(revealBeginRef.current!, "y", "px");
+    const qsSpot_op = gsap.quickSetter(spotlightRef.current!,   "opacity");
 
     const st = ScrollTrigger.create({
       trigger: section,
       start: "top top",
       end: "+=520%",
       pin: true,
-      scrub: true,
+      scrub: 1,
       onUpdate: (self) => {
         const p = self.progress;
 
@@ -272,6 +274,10 @@ export function Hero({ onReady }: { onReady?: () => void }) {
         const op3 = Math.min(1, Math.max(0, (p - 0.8) / 0.1));
         qsRB_op(op3);
         qsRB_y((1 - op3) * 20);
+
+        // Stone spotlight — fades in as ring fills viewport in Phase 4
+        const spotOp = Math.min(1, Math.max(0, (p - 0.78) / 0.14));
+        qsSpot_op(spotOp);
       },
     });
 
@@ -490,7 +496,22 @@ export function Hero({ onReady }: { onReady?: () => void }) {
             opacity: 0,
           }}
         >
-          {/* Radial vignette via CSS — preserves canvas alpha */}
+          {/* Dark Velvet atmosphere — stacked CSS layers over the canvas */}
+          {/* Stone spotlight — tight cone on center stone, scroll-driven Phase 4 */}
+          <div
+            ref={spotlightRef}
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 9,
+              pointerEvents: "none",
+              opacity: 0,
+              background:
+                "radial-gradient(ellipse 18% 14% at 50% 44%, rgba(255,248,220,0.22) 0%, rgba(220,180,80,0.08) 50%, transparent 100%)",
+            }}
+          />
+
+          {/* Room vignette — sharp wall edges, three-plane illusion */}
           <div
             style={{
               position: "absolute",
@@ -498,7 +519,29 @@ export function Hero({ onReady }: { onReady?: () => void }) {
               zIndex: 2,
               pointerEvents: "none",
               background:
-                "radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(10,10,10,0.6) 100%)",
+                "radial-gradient(ellipse at 50% 52%, transparent 32%, rgba(6,6,8,0.55) 44%, rgba(2,2,4,0.88) 100%)",
+            }}
+          />
+          {/* Floor edge — slightly stronger at bottom to separate floor from side walls */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 3,
+              pointerEvents: "none",
+              background:
+                "linear-gradient(to top, rgba(0,0,4,0.55) 0%, rgba(0,0,4,0.18) 18%, transparent 30%)",
+            }}
+          />
+          {/* Amber glow — warm centre behind the ring */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 4,
+              pointerEvents: "none",
+              background:
+                "radial-gradient(ellipse 38% 30% at 50% 50%, rgba(130,62,0,0.18) 0%, transparent 100%)",
             }}
           />
           <Canvas
@@ -514,7 +557,7 @@ export function Hero({ onReady }: { onReady?: () => void }) {
           >
             <color attach="background" args={["#0a0a0a"]} />
             <Suspense fallback={null}>
-              <LightTentEnvironment transparent={true} />
+              <LightTentEnvironment transparent={true} delay={500} />
               {/*
               4-light diamond rig (all castShadow:false for perf).
               Diamond sits at approx world-y ≈ 1.0–1.3 (top of ring, scale 1.8).

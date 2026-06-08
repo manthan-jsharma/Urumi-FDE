@@ -72,6 +72,10 @@ function buildStoneGroup(
       if (m.isMesh) geo = m.geometry;
     });
 
+  const STONE_SCALE_CORRECTION: Record<string, number> = {
+    princess: 0.85,
+  };
+
   const mat = makeDiamondMat(envIntensity, transmission);
   const mesh = new THREE.Mesh(
     (geo as unknown as THREE.BufferGeometry).clone(),
@@ -79,7 +83,7 @@ function buildStoneGroup(
   );
   const g = new THREE.Group();
   g.add(mesh);
-  g.scale.setScalar(radius);
+  g.scale.setScalar(radius * (STONE_SCALE_CORRECTION[stoneKey] ?? 1.0));
   return g;
 }
 
