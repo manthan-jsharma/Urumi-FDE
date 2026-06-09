@@ -51,6 +51,23 @@ const STONE_MESH_NAME: Record<string, string> = {
   pear: "stone_pear",
 };
 
+// Module-level geometry cache — scene traversal is O(n) on every stone change.
+// Caching makes repeated lookups O(1) after the first call per shape.
+const stoneGeoCache = new Map<string, THREE.BufferGeometry>();
+
+function getStoneGeo(stonesScene: THREE.Group, meshName: string): THREE.BufferGeometry | null {
+  const cached = stoneGeoCache.get(meshName);
+  if (cached) return cached;
+  let geo: THREE.BufferGeometry | null = null;
+  stonesScene.traverse((node) => {
+    if (geo) return;
+    const m = node as THREE.Mesh;
+    if (m.isMesh && m.name === meshName) geo = m.geometry;
+  });
+  if (geo) stoneGeoCache.set(meshName, geo);
+  return geo;
+}
+
 function buildStoneGroup(
   stonesScene: THREE.Group,
   stoneKey: string,
@@ -59,12 +76,7 @@ function buildStoneGroup(
   transmission: number
 ): THREE.Group {
   const meshName = STONE_MESH_NAME[stoneKey] ?? "stone_round";
-  let geo: THREE.BufferGeometry | null = null;
-  stonesScene.traverse((node) => {
-    if (geo) return;
-    const m = node as THREE.Mesh;
-    if (m.isMesh && m.name === meshName) geo = m.geometry;
-  });
+  let geo: THREE.BufferGeometry | null = getStoneGeo(stonesScene, meshName);
   if (!geo)
     stonesScene.traverse((node) => {
       if (geo) return;

@@ -285,6 +285,18 @@ export function Hero({ onReady }: { onReady?: () => void }) {
         // Stone spotlight — fades in as ring fills viewport in Phase 4
         const spotOp = Math.min(1, Math.max(0, (p - 0.78) / 0.14));
         qsSpot_op(spotOp);
+
+        // Spotlight tracks the center stone's projected screen position as the camera
+        // zooms through Phase 4. Stone sits at world [0, ~0.504, 0].
+        // Perspective projection at each phase boundary gives:
+        //   p=0.75 (Phase 4 start): cam [0,-0.2,2.6] lookAt y=0.45 → stone ~47% screen-Y
+        //   p=1.00 (Phase 4 end):   cam [0,-0.4,1.4] lookAt y=0.35 → stone ~37% screen-Y
+        {
+          const spotT = Math.max(0, (p - 0.75) / 0.25)
+          const spotY = (47 - spotT * 10).toFixed(1)
+          spotlightRef.current!.style.background =
+            `radial-gradient(ellipse 18% 14% at 50% ${spotY}%, rgba(255,248,220,0.22) 0%, rgba(220,180,80,0.08) 50%, transparent 100%)`
+        }
       },
     });
 
@@ -515,7 +527,7 @@ export function Hero({ onReady }: { onReady?: () => void }) {
               pointerEvents: "none",
               opacity: 0,
               background:
-                "radial-gradient(ellipse 18% 14% at 50% 44%, rgba(255,248,220,0.22) 0%, rgba(220,180,80,0.08) 50%, transparent 100%)",
+                "radial-gradient(ellipse 18% 14% at 50% 47%, rgba(255,248,220,0.22) 0%, rgba(220,180,80,0.08) 50%, transparent 100%)",
             }}
           />
 

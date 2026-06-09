@@ -4,6 +4,12 @@ import { useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
+// PMREMGenerator is the single most expensive per-canvas operation — 100–400ms GPU stall.
+// Since the light tent geometry and parameters are identical across every canvas, we cache
+// the generated render target per WebGL renderer. Each Canvas gets its own renderer (GL
+// context), so generation happens exactly once per canvas lifetime, never on remount.
+const pmremCache = new WeakMap<THREE.WebGLRenderer, THREE.WebGLRenderTarget>()
+
 // Programmatic "light tent" environment map — 24 discrete emissive bulbs
 // against a near-black backdrop.  Each bulb becomes one distinct sparkle
 // on a diamond facet and one highlight arc on the gold band.
@@ -58,15 +64,34 @@ export function LightTentEnvironment({
   backgroundIntensity?: number
   delay?:               number
 }) {
-  const { gl, scene } = useThree()
+  const { gl, scene, invalidate } = useThree()
 
   useEffect(() => {
     let cancelled = false
     let rt: THREE.WebGLRenderTarget | null = null
     let timer: ReturnType<typeof setTimeout> | null = null
 
+    const applyEnv = (renderTarget: THREE.WebGLRenderTarget) => {
+      scene.environment = renderTarget.texture
+      if (!transparent) {
+        scene.background = renderTarget.texture
+        ;(scene as any).backgroundIntensity = backgroundIntensity
+      }
+      // Trigger a render so the env map is visible immediately — critical in demand
+      // frameloop mode where setting scene.environment alone doesn't schedule a frame.
+      invalidate()
+    }
+
     const run = () => {
       if (cancelled) return
+
+      // Cache hit: reuse existing env map for this GL context — zero GPU cost
+      const cached = pmremCache.get(gl)
+      if (cached) {
+        applyEnv(cached)
+        return
+      }
+
       const pmrem = new THREE.PMREMGenerator(gl)
 
       const envScene = new THREE.Scene()
@@ -84,8 +109,8 @@ export function LightTentEnvironment({
       })
 
       rt = pmrem.fromScene(envScene)
-      const envMap = rt.texture
 
+      // Dispose temp scene geometry; keep rt alive — its texture lives in the cache
       envScene.traverse((node) => {
         const m = node as THREE.Mesh
         if (m.isMesh) { m.geometry.dispose(); (m.material as THREE.Material).dispose() }
@@ -94,11 +119,8 @@ export function LightTentEnvironment({
 
       if (cancelled) { rt.dispose(); rt = null; return }
 
-      scene.environment = envMap
-      if (!transparent) {
-        scene.background = envMap
-        ;(scene as any).backgroundIntensity = backgroundIntensity
-      }
+      pmremCache.set(gl, rt)
+      applyEnv(rt)
     }
 
     timer = setTimeout(run, delay)
@@ -108,7 +130,7 @@ export function LightTentEnvironment({
       if (timer !== null) clearTimeout(timer)
       scene.environment = null
       if (!transparent) scene.background = null
-      if (rt) { rt.dispose(); rt = null }
+      // rt stays in pmremCache — reused if this GL context remounts LightTentEnvironment
     }
   }, [gl, scene, transparent, backgroundIntensity])
 

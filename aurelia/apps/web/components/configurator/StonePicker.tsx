@@ -27,15 +27,16 @@ const SHAPES_3D   = ['round', 'oval', 'princess', 'cushion', 'marquise', 'pear']
 const SHAPES_FLAT = ['emerald', 'radiant', 'asscher', 'heart'] as const
 
 // ── Floating 3D preview frame ─────────────────────────────────────────────────
-// Appears to the right of the picker on hover, shows a large spinning stone.
-function StonePreview({ shape, y }: { shape: string; y: number }) {
+// Stays mounted after first hover — the GL context persists so PMREMGenerator
+// runs exactly once, and subsequent hovers are instant (env map is cached).
+// frameloop switches to "demand" when hidden so the GPU does zero work while idle.
+function StonePreview({ shape, y, visible }: { shape: string; y: number; visible: boolean }) {
   const label = STONE_CONFIGS[shape]?.label ?? shape
 
   return (
     <motion.div
       initial={{ opacity: 0, x: -8 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -8 }}
+      animate={{ opacity: visible ? 1 : 0, x: visible ? 0 : -8 }}
       transition={{ duration: 0.18, ease: 'easeOut' }}
       style={{
         position: 'fixed',
@@ -77,7 +78,8 @@ function StonePreview({ shape, y }: { shape: string; y: number }) {
           camera={{ position: [0, 0.3, 2.4], fov: 40 }}
           gl={{ antialias: true, alpha: true, toneMapping: 4, toneMappingExposure: 1.0 }}
           style={{ background: 'transparent' }}
-          dpr={[1, 2]}
+          frameloop={visible ? 'always' : 'demand'}
+          dpr={[1, 1.5]}
         >
           <Suspense fallback={null}>
             <LightTentEnvironment transparent={true} />
@@ -209,6 +211,22 @@ export function StonePicker() {
   const [hoverY,        setHoverY]        = useState(0)
   const [moreOpen,      setMoreOpen]      = useState(false)
 
+  // Persistent preview state — canvas stays mounted after first hover so the
+  // GL context (and cached PMREMGenerator result) survives between hover events.
+  const [previewMounted, setPreviewMounted] = useState(false)
+  const [previewShape,   setPreviewShape]   = useState<string>('round')
+  const [previewY,       setPreviewY]       = useState(0)
+
+  function onEnter(shape: string, y: number) {
+    setPreviewShape(shape)
+    setPreviewY(y)
+    setHoveredStone(shape)
+    setHoverY(y)
+    if (!previewMounted) setPreviewMounted(true)
+  }
+
+  function onLeave() { setHoveredStone(null) }
+
   return (
     <div style={{
       width: 280, flexShrink: 0,
@@ -233,22 +251,20 @@ export function StonePicker() {
         Shape
       </div>
 
-      {/* 3D stone thumbnails */}
+      {/* 3D stone thumbnails — staggered delay staggers PMREM generation across 6 GL contexts */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 72px)', gap: 12, marginBottom: 16 }}>
-        {SHAPES_3D.map((shape) => (
+        {SHAPES_3D.map((shape, i) => (
           <div
             key={shape}
-            onMouseEnter={e => {
-              setHoveredStone(shape)
-              setHoverY(e.currentTarget.getBoundingClientRect().top + e.currentTarget.getBoundingClientRect().height / 2)
-            }}
-            onMouseLeave={() => setHoveredStone(null)}
+            onMouseEnter={e => onEnter(shape, e.currentTarget.getBoundingClientRect().top + e.currentTarget.getBoundingClientRect().height / 2)}
+            onMouseLeave={onLeave}
           >
             <StoneThumb
               shape={shape}
               selected={currentStone === shape}
               label={STONE_CONFIGS[shape].label}
               onClick={() => setStone(shape)}
+              delay={i * 80}
             />
           </div>
         ))}
@@ -298,8 +314,8 @@ export function StonePicker() {
                   selected={currentStone === shape}
                   label={STONE_CONFIGS[shape].label}
                   onClick={() => setStone(shape)}
-                  onMouseEnter={(y) => { setHoveredStone(shape); setHoverY(y) }}
-                  onMouseLeave={() => setHoveredStone(null)}
+                  onMouseEnter={(y) => onEnter(shape, y)}
+                  onMouseLeave={onLeave}
                 />
               ))}
             </div>
@@ -307,10 +323,11 @@ export function StonePicker() {
         )}
       </AnimatePresence>
 
-      {/* Floating 3D preview — portal-like, fixed to viewport */}
-      <AnimatePresence>
-        {hoveredStone && <StonePreview shape={hoveredStone} y={hoverY} />}
-      </AnimatePresence>
+      {/* Floating 3D preview — canvas stays mounted after first hover to preserve the
+          GL context and reuse the cached PMREMGenerator result on every subsequent hover */}
+      {previewMounted && (
+        <StonePreview shape={previewShape} y={previewY} visible={!!hoveredStone} />
+      )}
 
     </div>
   )

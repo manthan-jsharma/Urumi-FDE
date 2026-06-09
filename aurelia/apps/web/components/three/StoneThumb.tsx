@@ -102,9 +102,10 @@ interface StoneThumbProps {
   selected: boolean
   label: string
   onClick: () => void
+  delay?: number
 }
 
-export function StoneThumb({ shape, selected, label, onClick }: StoneThumbProps) {
+export function StoneThumb({ shape, selected, label, onClick, delay = 0 }: StoneThumbProps) {
   return (
     <button
       onClick={onClick}
@@ -130,7 +131,7 @@ export function StoneThumb({ shape, selected, label, onClick }: StoneThumbProps)
           dpr={[1, 1.5]}
         >
           <Suspense fallback={null}>
-            <LightTentEnvironment transparent={true} />
+            <LightTentEnvironment transparent={true} delay={delay} />
             <spotLight position={[2, 5, 2.5]}      intensity={14} angle={0.13} penumbra={0.04} color="#ffffff" />
             <spotLight position={[-2.5, 3.5, 1.5]}  intensity={10} angle={0.16} penumbra={0.06} color="#ffffff" />
             <spotLight position={[0.3, 7, 0.5]}    intensity={12} angle={0.11} penumbra={0.03} color="#ffffff" />
