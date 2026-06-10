@@ -72,7 +72,7 @@ export function Ring3DView() {
       <Particles />
 
       <div style={{ position: 'absolute', inset: 0 }}>
-        <Canvas camera={{ position: [0, 3, 12], fov: 40 }} gl={{ antialias: true, alpha: false, toneMapping: 4 }} dpr={[1, 2]} shadows>
+        <Canvas camera={{ position: [0, 3, 12], fov: 40 }} gl={{ antialias: true, alpha: false, toneMapping: 4 }} dpr={[1, 1.5]} shadows>
           <color attach="background" args={['#080808']} />
           <Suspense fallback={null}>
             <LightTentEnvironment />

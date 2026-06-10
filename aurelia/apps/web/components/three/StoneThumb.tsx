@@ -1,12 +1,12 @@
 'use client'
 
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { useGLTF, OrbitControls } from '@react-three/drei'
+import { useGLTF } from '@react-three/drei'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { LightTentEnvironment } from '@/components/three/LightTentEnvironment'
 
-useGLTF.preload('/models/stones.glb')
+useGLTF.preload('/models/stones.glb?v=2')
 
 export function DarkBackground({ color = '#0a0a0a' }: { color?: string }) {
   const { scene } = useThree()
@@ -22,7 +22,7 @@ const STONE_MESH_NAME: Record<string, string> = {
 }
 
 export function StoneGeometry({ shape }: { shape: StoneShape }) {
-  const { scene } = useGLTF('/models/stones.glb')
+  const { scene } = useGLTF('/models/stones.glb?v=2')
 
   const geo = useMemo(() => {
     const name = STONE_MESH_NAME[shape] ?? 'stone_round'
@@ -89,6 +89,26 @@ export function Crystal({ x, y, z, s, rs, fp }: CrystalProps) {
   )
 }
 
+// Drives the demand-mode canvas at a fixed ~20 fps via setInterval → invalidate.
+// Replaces OrbitControls autoRotate (which fired invalidate at 60 fps).
+function ThrottledLoop() {
+  const { invalidate } = useThree()
+  useEffect(() => {
+    const id = setInterval(invalidate, 50) // 20 fps
+    return () => clearInterval(id)
+  }, [invalidate])
+  return null
+}
+
+// Wrapper that slow-rotates the stone without OrbitControls.
+function RotatingStone({ shape }: { shape: StoneShape }) {
+  const ref = useRef<THREE.Group>(null)
+  useFrame(({ clock }) => {
+    if (ref.current) ref.current.rotation.y = clock.getElapsedTime() * 0.5
+  })
+  return <group ref={ref}><StoneGeometry shape={shape} /></group>
+}
+
 // 4 small crystals sized for the 72×72 thumbnail canvas
 const THUMB_CRYSTALS = [
   { x: -0.62, y:  0.42, z: -0.85, s: 0.020, rs: 0.60, fp: 0.00 },
@@ -125,12 +145,13 @@ export function StoneThumb({ shape, selected, label, onClick, delay = 0 }: Stone
       }}>
         <Canvas
           camera={{ position: [0, 0.3, 2.4], fov: 40 }}
-          gl={{ antialias: true, alpha: true, toneMapping: 4 }}
+          gl={{ antialias: false, alpha: true, toneMapping: 4 }}
           style={{ background: 'transparent' }}
           frameloop="demand"
-          dpr={[1, 1.5]}
+          dpr={1}
         >
           <Suspense fallback={null}>
+            <ThrottledLoop />
             <LightTentEnvironment transparent={true} delay={delay} />
             <spotLight position={[2, 5, 2.5]}      intensity={14} angle={0.13} penumbra={0.04} color="#ffffff" />
             <spotLight position={[-2.5, 3.5, 1.5]}  intensity={10} angle={0.16} penumbra={0.06} color="#ffffff" />
@@ -138,8 +159,7 @@ export function StoneThumb({ shape, selected, label, onClick, delay = 0 }: Stone
             <spotLight position={[0, 1, 4]}          intensity={8}  angle={0.18} penumbra={0.06} color="#ffffff" />
             <ambientLight intensity={0.03} />
             {THUMB_CRYSTALS.map((c, i) => <Crystal key={i} {...c} />)}
-            <StoneGeometry shape={shape} />
-            <OrbitControls enableZoom={false} enablePan={false} autoRotate autoRotateSpeed={5} />
+            <RotatingStone shape={shape} />
           </Suspense>
         </Canvas>
       </div>

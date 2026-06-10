@@ -134,7 +134,7 @@ export function FinalCTA() {
               metalKey="18k-yellow"
               rotateSpeed={0.38}
               stoneEnvIntensity={6}
-              stoneTransmission={0.88}
+              stoneTransmission={0}
             />
           </Suspense>
         </Canvas>

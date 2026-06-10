@@ -636,7 +636,7 @@ export function Hero({ onReady }: { onReady?: () => void }) {
                 metalKey="18k-yellow"
                 rotateSpeed={0.38}
                 stoneEnvIntensity={6}
-                stoneTransmission={0.88}
+                stoneTransmission={0}
                 mouseRef={mouseRef}
                 onReady={onReady}
               />

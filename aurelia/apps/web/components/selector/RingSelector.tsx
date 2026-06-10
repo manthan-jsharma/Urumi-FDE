@@ -230,7 +230,7 @@ export function RingSelector() {
                 metalKey={current.metal}
                 stoneKey={current.stones[variant]}
                 stoneEnvIntensity={6}
-                stoneTransmission={0.88}
+                stoneTransmission={0}
                 onReady={() => setIsLoaded(true)}
               />
               <ContactShadows position={[0, -1.2, 0]} opacity={0.3} blur={2.5} scale={4} />
