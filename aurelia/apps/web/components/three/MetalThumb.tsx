@@ -1,10 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Canvas } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
-import { useThree } from '@react-three/fiber'
+import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { Suspense } from 'react'
+import * as THREE from 'three'
 import { MetalConfig } from '@/lib/materials'
 import { LightTentEnvironment } from '@/components/three/LightTentEnvironment'
 
@@ -23,15 +22,32 @@ function Exposure() {
   return null
 }
 
+function ThrottledLoop() {
+  const { invalidate } = useThree()
+  useEffect(() => {
+    const id = setInterval(invalidate, 50)
+    return () => clearInterval(id)
+  }, [invalidate])
+  return null
+}
+
 function MetalRingScene({ config }: { config: MetalConfig }) {
+  const meshRef = useRef<THREE.Mesh>(null)
+  useEffect(() => {
+    if (meshRef.current) meshRef.current.rotation.x = Math.PI / 3
+  }, [])
+  useFrame(({ clock }) => {
+    if (meshRef.current) meshRef.current.rotation.y = clock.getElapsedTime() * 0.7
+  })
   return (
     <>
+      <ThrottledLoop />
       <Exposure />
       <LightTentEnvironment transparent={true} />
       <spotLight position={[1, 3, 2]} intensity={5} angle={0.5} penumbra={0.6} castShadow={false} />
       <spotLight position={[-2, 2, -1]} intensity={3} angle={0.6} penumbra={0.8} castShadow={false} />
       <ambientLight intensity={0.12} />
-      <mesh rotation={[Math.PI / 3, 0, 0]}>
+      <mesh ref={meshRef}>
         <torusGeometry args={[0.5, 0.15, 16, 64]} />
         <meshPhysicalMaterial
           color={config.color}
@@ -42,12 +58,6 @@ function MetalRingScene({ config }: { config: MetalConfig }) {
           clearcoatRoughness={config.clearcoatRoughness}
         />
       </mesh>
-      <OrbitControls
-        enableZoom={false}
-        enablePan={false}
-        autoRotate
-        autoRotateSpeed={4}
-      />
     </>
   )
 }
@@ -91,9 +101,9 @@ export function MetalThumb({ metalKey: _metalKey, config, selected, onClick, sho
         {showCanvas ? (
           <Canvas
             camera={{ position: [0, 0, 1.95], fov: 42 }}
-            gl={{ antialias: true, alpha: true, toneMapping: 4 }}
-            frameloop="always"
-            dpr={[1, 1.5]}
+            gl={{ antialias: false, alpha: true, toneMapping: 4 }}
+            frameloop="demand"
+            dpr={1}
             style={{ display: 'block' }}
           >
             <Suspense fallback={null}>

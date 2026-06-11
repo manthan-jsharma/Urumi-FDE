@@ -43,7 +43,8 @@ export function PostFX({
         luminanceThreshold={bloomThreshold}
         luminanceSmoothing={0.06}
         intensity={bloom ? bloomIntensity : 0}
-        kernelSize={KernelSize.MEDIUM}
+        kernelSize={KernelSize.LARGE}
+        mipmapBlur
         blendFunction={BlendFunction.ADD}
       />
 

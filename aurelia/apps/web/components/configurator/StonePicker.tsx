@@ -1,9 +1,7 @@
 'use client'
 
-import { useState, Suspense } from 'react'
-import { Canvas } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
-import { EffectComposer, Bloom } from '@react-three/postprocessing'
+import { useState, useRef, useEffect, Suspense } from 'react'
+import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { motion, AnimatePresence } from 'framer-motion'
 import { STONE_CONFIGS } from '@/lib/materials'
 import { useConfigStore } from '@/lib/store'
@@ -23,13 +21,27 @@ const CRYSTAL_CONFIG = [
   { x:  0.3, y:  1.1, z: -2.8, s: 0.030, rs: 0.70, fp: 0.50 },
 ]
 
-const SHAPES_3D   = ['round', 'oval', 'princess', 'cushion', 'marquise', 'pear'] as const
+const SHAPES_3D   = ['round', 'princess', 'cushion', 'marquise', 'oval', 'pear'] as const
 const SHAPES_FLAT = ['emerald', 'radiant', 'asscher', 'heart'] as const
 
+function ThrottledPreviewLoop() {
+  const { invalidate } = useThree()
+  useEffect(() => {
+    const id = setInterval(invalidate, 50)
+    return () => clearInterval(id)
+  }, [invalidate])
+  return null
+}
+
+function RotatingPreviewStone({ shape }: { shape: string }) {
+  const ref = useRef<any>(null)
+  useFrame(({ clock }) => {
+    if (ref.current) ref.current.rotation.y = clock.getElapsedTime() * 0.5
+  })
+  return <group ref={ref}><StoneGeometry shape={shape as any} /></group>
+}
+
 // ── Floating 3D preview frame ─────────────────────────────────────────────────
-// Stays mounted after first hover — the GL context persists so PMREMGenerator
-// runs exactly once, and subsequent hovers are instant (env map is cached).
-// frameloop switches to "demand" when hidden so the GPU does zero work while idle.
 function StonePreview({ shape, y, visible }: { shape: string; y: number; visible: boolean }) {
   const label = STONE_CONFIGS[shape]?.label ?? shape
 
@@ -78,10 +90,11 @@ function StonePreview({ shape, y, visible }: { shape: string; y: number; visible
           camera={{ position: [0, 0.3, 2.4], fov: 40 }}
           gl={{ antialias: true, alpha: true, toneMapping: 4, toneMappingExposure: 1.0 }}
           style={{ background: 'transparent' }}
-          frameloop={visible ? 'always' : 'demand'}
-          dpr={[1, 1.5]}
+          frameloop="demand"
+          dpr={1}
         >
           <Suspense fallback={null}>
+            <ThrottledPreviewLoop />
             <LightTentEnvironment transparent={true} />
             <spotLight position={[2, 5, 2.5]}     intensity={14} angle={0.13} penumbra={0.04} color="#ffffff" />
             <spotLight position={[-2.5, 3.5, 1.5]} intensity={10} angle={0.16} penumbra={0.06} color="#ffffff" />
@@ -89,11 +102,7 @@ function StonePreview({ shape, y, visible }: { shape: string; y: number; visible
             <spotLight position={[0, 1, 4]}         intensity={8}  angle={0.18} penumbra={0.06} color="#ffffff" />
             <ambientLight intensity={0.06} />
             {CRYSTAL_CONFIG.map((c, i) => <Crystal key={i} {...c} />)}
-            <StoneGeometry shape={shape as any} />
-            <OrbitControls enableZoom={false} enablePan={false} autoRotate autoRotateSpeed={6} />
-            <EffectComposer>
-              <Bloom luminanceThreshold={0.7} luminanceSmoothing={0.05} intensity={0.8} mipmapBlur />
-            </EffectComposer>
+            <RotatingPreviewStone shape={shape} />
           </Suspense>
         </Canvas>
       </div>

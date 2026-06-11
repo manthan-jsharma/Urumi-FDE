@@ -9,6 +9,10 @@ import { METAL_CONFIGS } from "@/lib/materials";
 
 useGLTF.preload("/models/ring-parts.glb");
 useGLTF.preload("/models/stones.glb?v=2");
+useGLTF.preload("/models/cushion-crown.glb?v=3");
+useGLTF.preload("/models/princess-crown.glb?v=1");
+useGLTF.preload("/models/round-stone.glb?v=1");
+useGLTF.preload("/models/marquise-crown.glb?v=1");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Diamond material — flatShading gives each facet its own normal, producing the
@@ -68,7 +72,7 @@ const DISPERSION_TRANSMISSION_GLSL = /* glsl */ `
   // Narrow transmission window: only nearly-face-on facets (cosV > 0.78) transmit.
   // Side/grazing facets are fully opaque — hides the prong basket that sits behind
   // the stone in the transmission background capture.
-  float _tirFade = smoothstep( 0.48, 0.82, _cosV );   // 0 at grazing, 1 face-on
+  float _tirFade = smoothstep( 0.68, 0.92, _cosV );   // 0 at grazing, 1 face-on
   float _effTrans = material.transmission * _tirFade;
 
   material.transmissionAlpha = mix( material.transmissionAlpha, transmitted.a, _effTrans );
@@ -93,7 +97,20 @@ const DISPERSION_TRANSMISSION_GLSL = /* glsl */ `
 // Two layers (coarse + fine) still give multi-scale detail but cost only
 // 2 × (3 octaves × 8 hash calls) = 48 hash calls vs the old 384. ~8× faster.
 const DENTS_PREAMBLE_GLSL = /* glsl */ `
-varying vec3 vObjectPos;
+varying vec3  vObjectPos;
+uniform vec3  uStretchAxis;
+uniform float uStretch;
+uniform float uGrid;
+uniform float uCoarseFreq;
+uniform float uFineFreq;
+uniform float uDentStrength;
+
+// Compress the stretch-axis component so FBM features elongate along that axis.
+vec3 _warpAniso( vec3 p ) {
+  float proj = dot( p, uStretchAxis );
+  vec3  perp = p - proj * uStretchAxis;
+  return perp + uStretchAxis * ( proj / max( uStretch, 0.001 ) );
+}
 
 float _hsh( vec3 p ) {
   p  = fract( p * vec3( 443.897, 441.423, 437.195 ) );
@@ -101,11 +118,9 @@ float _hsh( vec3 p ) {
   return fract( ( p.x + p.y ) * p.z );
 }
 
-// Returns vec4( noise_value, gradient.xyz ) — one call does the work of 7.
 vec4 _vng( vec3 p ) {
   vec3 i  = floor( p );
   vec3 f  = fract( p );
-  // Quintic smoothstep (C2): smoother than cubic, required for correct analytic grad
   vec3 u  = f*f*f*( f*( f*6.0 - 15.0 ) + 10.0 );
   vec3 du = f*f*(   f*( f*30.0 - 60.0 ) + 30.0 );
 
@@ -130,7 +145,6 @@ vec4 _vng( vec3 p ) {
   );
 }
 
-// 3-octave analytic-gradient FBM — returns vec4(value, gradient.xyz)
 vec4 _fbmG( vec3 p ) {
   vec4  r = vec4(0.0);
   float a = 0.50;
@@ -146,24 +160,49 @@ vec4 _fbmG( vec3 p ) {
 }
 `;
 
-// Dent block — two analytic FBM calls replace the old 12 central-difference calls
 const MICRO_DENTS_GLSL = /* glsl */ `
 {
-  // Coarse layer: large bowl-shaped dents between facet groups
-  vec3 _bumpA = _fbmG( vObjectPos *  8.0 ).yzw;
-  // Fine layer:  micro-scratches / polishing marks within each facet
-  vec3 _bumpB = _fbmG( vObjectPos * 32.0 ).yzw;
+  vec3 _wp    = _warpAniso( vObjectPos );
+  vec3 _bumpA = _fbmG( _wp * uCoarseFreq ).yzw;
+  vec3 _bumpB = _fbmG( _wp * uFineFreq   ).yzw;
+
+  // Princess-cut grid: derivative of cos(x*f)*cos(z*f) — axis-aligned cross-hatch.
+  float _gf    = 28.0;
+  vec3  _gridB = vec3(
+    -sin( vObjectPos.x * _gf ) * cos( vObjectPos.z * _gf ),
+     0.0,
+    -cos( vObjectPos.x * _gf ) * sin( vObjectPos.z * _gf )
+  );
 
   normal = normalize( normal
-    + normalize( _bumpA ) * 0.32
-    + normalize( _bumpB ) * 0.16 );
+    + normalize( _bumpA ) * 0.30 * uDentStrength
+    + normalize( _bumpB ) * 0.14 * uDentStrength
+    + normalize( _gridB ) * uGrid );
 }
 `;
 
+// Per-stone FBM pattern params — uniforms give each shape a distinctive dent
+// without extra shader compilations (one cacheKey, different uniform values).
+const STONE_PATTERNS: Record<string, {
+  axis: [number, number, number];
+  stretch: number;
+  grid: number;
+  coarseFreq: number;
+  fineFreq: number;
+  dentStrength: number;
+}> = {
+  round:    { axis: [1, 0, 0], stretch: 1.0, grid: 0.00, coarseFreq:  8.0, fineFreq: 32.0, dentStrength: 1.0 },
+  oval:     { axis: [1, 0, 0], stretch: 2.5, grid: 0.00, coarseFreq:  7.0, fineFreq: 28.0, dentStrength: 1.0 },
+  princess: { axis: [1, 0, 0], stretch: 1.0, grid: 0.28, coarseFreq: 10.0, fineFreq: 38.0, dentStrength: 1.0 },
+  cushion:  { axis: [1, 0, 0], stretch: 1.0, grid: 0.00, coarseFreq:  4.5, fineFreq: 18.0, dentStrength: 1.0 },
+  marquise: { axis: [1, 0, 0], stretch: 3.2, grid: 0.00, coarseFreq:  7.0, fineFreq: 28.0, dentStrength: 1.0 },
+  pear:     { axis: [1, 0, 0], stretch: 2.0, grid: 0.00, coarseFreq:  7.5, fineFreq: 30.0, dentStrength: 1.0 },
+};
+
 function makeDiamondMat(
   envIntensity = 5.5,
-  transmission = 0          // default 0 — background canvases stay fast/opaque.
-                             // Pass 0.72 only for the main configurator canvas.
+  transmission = 0,
+  stoneKey = 'round'
 ): THREE.MeshPhysicalMaterial {
   const hasTransmission = transmission > 0;
   const mat = new THREE.MeshPhysicalMaterial({
@@ -189,30 +228,31 @@ function makeDiamondMat(
   });
 
   mat.onBeforeCompile = (shader) => {
-    // ── Vertex shader: export object-space position as varying ────────────
-    // Must go at global scope (before void main) so the declaration is valid.
+    const pat = STONE_PATTERNS[stoneKey] ?? STONE_PATTERNS.round;
+    shader.uniforms.uStretchAxis  = { value: new THREE.Vector3(pat.axis[0], pat.axis[1], pat.axis[2]) };
+    shader.uniforms.uStretch      = { value: pat.stretch };
+    shader.uniforms.uGrid         = { value: pat.grid };
+    shader.uniforms.uCoarseFreq   = { value: pat.coarseFreq };
+    shader.uniforms.uFineFreq     = { value: pat.fineFreq };
+    shader.uniforms.uDentStrength = { value: pat.dentStrength ?? 1.0 };
+
     shader.vertexShader = shader.vertexShader.replace(
       'void main() {',
       `varying vec3 vObjectPos;\nvoid main() {`
     );
-    // Set it right after Three.js sets `transformed = position` in begin_vertex.
     shader.vertexShader = shader.vertexShader.replace(
       '#include <begin_vertex>',
       `#include <begin_vertex>\nvObjectPos = position;`
     );
 
-    // ── Fragment shader ───────────────────────────────────────────────────
-    // 1. Inject noise functions + varying declaration at global scope
     shader.fragmentShader = shader.fragmentShader.replace(
       'void main() {',
       `${DENTS_PREAMBLE_GLSL}\nvoid main() {`
     );
-    // 2. Dispersion: replace the transmission include with the 3-channel IOR version
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <transmission_fragment>',
       DISPERSION_TRANSMISSION_GLSL
     );
-    // 3. FBM bump dents: gradient-based normal perturbation after normal map stage
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <normal_fragment_maps>',
       `#include <normal_fragment_maps>\n${MICRO_DENTS_GLSL}`
@@ -284,6 +324,354 @@ const stoneGeoCache = new Map<string, THREE.BufferGeometry>();
 // re-runs both passes. With this, each shape pays the cost exactly once.
 const subdivGeoCache = new Map<string, THREE.BufferGeometry>();
 
+// Per-sector max-radius girdle detection: finds the true equator of the crown
+// (the widest ring) rather than relying on a fixed Y-threshold. Only looks at
+// the lower 40% of crown height to avoid confusing table facets for the girdle.
+// Returns sectors sorted by angle with actual X/Y/Z positions preserved.
+function extractGirdle(
+  nPos: Float32Array,
+  count: number,
+  crownMaxY: number
+): Array<{ x: number; y: number; z: number; r: number; a: number }> {
+  const midY = crownMaxY * 0.4;
+  const N_SECTORS = 64;
+  type Best = { x: number; y: number; z: number; r: number; a: number };
+  const sectors: (Best | null)[] = new Array(N_SECTORS).fill(null);
+  for (let i = 0; i < count; i++) {
+    const x = nPos[i * 3], y = nPos[i * 3 + 1], z = nPos[i * 3 + 2];
+    if (y > midY) continue;
+    const r = Math.sqrt(x * x + z * z);
+    let a = Math.atan2(z, x); if (a < 0) a += Math.PI * 2;
+    const s = Math.floor((a / (Math.PI * 2)) * N_SECTORS) % N_SECTORS;
+    if (!sectors[s] || r > sectors[s]!.r) {
+      sectors[s] = { x, y, z, r, a: (s / N_SECTORS) * Math.PI * 2 };
+    }
+  }
+  const result = sectors.filter(Boolean) as Best[];
+  result.sort((a, b) => a.a - b.a);
+  return result;
+}
+
+// Resamples girdle sectors to N evenly-spaced points, interpolating actual
+// X/Y/Z so the pavilion top ring exactly matches the crown's widest contour.
+function resampleGirdle(
+  raw: Array<{ x: number; y: number; z: number; r: number; a: number }>,
+  N: number
+): THREE.Vector3[] {
+  const M = raw.length;
+  return Array.from({ length: N }, (_, i) => {
+    const tgt = (i / N) * Math.PI * 2;
+    if (!M) return new THREE.Vector3(Math.cos(tgt), 0, Math.sin(tgt));
+    let lo = 0;
+    for (let j = 0; j < M; j++) { if (raw[j].a <= tgt) lo = j; }
+    const hi = (lo + 1) % M;
+    const aLo = raw[lo].a, aHi = hi === 0 ? raw[0].a + Math.PI * 2 : raw[hi].a;
+    const t = aHi > aLo + 1e-6 ? Math.min(1, (tgt - aLo) / (aHi - aLo)) : 0;
+    return new THREE.Vector3(
+      raw[lo].x + (raw[hi].x - raw[lo].x) * t,
+      raw[lo].y + (raw[hi].y - raw[lo].y) * t,
+      raw[lo].z + (raw[hi].z - raw[lo].z) * t
+    );
+  });
+}
+
+// ── Round: full Tripo GLB (crown + pavilion already present) ─────────────────
+// Normalises to unit XZ radius and re-centres Y so the girdle (widest ring) sits
+// at Y=0 — same reference frame as the hybrid stones. No pavilion building needed.
+function buildRoundStoneGeo(roundScene: THREE.Group): THREE.BufferGeometry {
+  let crownMesh: THREE.Mesh | null = null;
+  roundScene.traverse((node) => {
+    if (!crownMesh && (node as THREE.Mesh).isMesh) crownMesh = node as THREE.Mesh;
+  });
+  if (!crownMesh) return new THREE.BufferGeometry();
+
+  const srcGeo = (crownMesh as THREE.Mesh).geometry;
+  const pos = srcGeo.getAttribute('position') as THREE.BufferAttribute;
+
+  let maxX = -Infinity, minX = Infinity, maxZ = -Infinity, minZ = Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    if (x > maxX) maxX = x; if (x < minX) minX = x;
+    if (z > maxZ) maxZ = z; if (z < minZ) minZ = z;
+  }
+  const sc = 1.0 / (Math.max(maxX - minX, maxZ - minZ) / 2);
+
+  const nPos = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    nPos[i * 3]     = pos.getX(i) * sc;
+    nPos[i * 3 + 1] = pos.getY(i) * sc;
+    nPos[i * 3 + 2] = pos.getZ(i) * sc;
+  }
+
+  // Find the girdle (global max-radius vertex) and shift Y so it sits at Y=0
+  let maxR = 0, girdleY = 0;
+  for (let i = 0; i < pos.count; i++) {
+    const x = nPos[i * 3], y = nPos[i * 3 + 1], z = nPos[i * 3 + 2];
+    const r = Math.sqrt(x * x + z * z);
+    if (r > maxR) { maxR = r; girdleY = y; }
+  }
+  for (let i = 0; i < pos.count; i++) nPos[i * 3 + 1] -= girdleY;
+
+  const srcIdx = srcGeo.getIndex()!;
+  const nIdx = new Uint32Array(srcIdx.count);
+  for (let i = 0; i < srcIdx.count; i++) nIdx[i] = srcIdx.getX(i);
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(nPos, 3));
+  geo.setIndex(new THREE.BufferAttribute(nIdx, 1));
+  return geo;
+}
+
+// ── Cushion hybrid: GLB crown (13K tris) + faceted pavilion ─────────────────
+// Uses max-radius girdle detection so the pavilion top ring connects exactly at
+// the crown's widest point — no gap, no step at the seam.
+function buildCushionHybridGeo(cushionScene: THREE.Group): THREE.BufferGeometry {
+  let crownMesh: THREE.Mesh | null = null;
+  cushionScene.traverse((node) => {
+    if (!crownMesh && (node as THREE.Mesh).isMesh) crownMesh = node as THREE.Mesh;
+  });
+  if (!crownMesh) return new THREE.BufferGeometry();
+
+  const srcGeo = (crownMesh as THREE.Mesh).geometry;
+  const pos = srcGeo.getAttribute('position') as THREE.BufferAttribute;
+
+  // Normalize: bottom-most vertex → Y=0, max XZ radius → 1.0
+  let minY = Infinity, maxX = -Infinity, minX = Infinity, maxZ = -Infinity, minZ = Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x; if (x < minX) minX = x;
+    if (z > maxZ) maxZ = z; if (z < minZ) minZ = z;
+  }
+  const sc = 1.0 / (Math.max(maxX - minX, maxZ - minZ) / 2);
+  const yShift = -minY * sc;
+
+  const nPos = new Float32Array(pos.count * 3);
+  let crownMaxY = -Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    nPos[i * 3]     = pos.getX(i) * sc;
+    nPos[i * 3 + 1] = pos.getY(i) * sc + yShift;
+    nPos[i * 3 + 2] = pos.getZ(i) * sc;
+    if (nPos[i * 3 + 1] > crownMaxY) crownMaxY = nPos[i * 3 + 1];
+  }
+  const srcIdx = srcGeo.getIndex()!;
+  const nIdx = new Uint32Array(srcIdx.count);
+  for (let i = 0; i < srcIdx.count; i++) nIdx[i] = srcIdx.getX(i);
+
+  // Find the true girdle (max-radius per sector) and resample to 16 points
+  const girdleRaw = extractGirdle(nPos, pos.count, crownMaxY);
+  const N = 16;
+  const girdle = resampleGirdle(girdleRaw, N);
+
+  // Pavilion drops from actual girdle Y (not forced 0) so it meets the crown flush
+  const girdleY = girdle.reduce((s, p) => s + p.y, 0) / N;
+  const pavH   = 1.2;
+  const yBreak = girdleY - pavH * 0.52;
+  const yC     = girdleY - pavH;
+  const breakR = girdle.map(p => new THREE.Vector3(p.x * 0.42, yBreak, p.z * 0.42));
+  const culet  = new THREE.Vector3(0, yC, 0);
+
+  type Tri = [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+  const T: Tri[] = [];
+
+  // Girdle → break: N quads = 2N kite triangles
+  for (let i = 0; i < N; i++) {
+    const j = (i + 1) % N;
+    T.push([girdle[i], breakR[i], breakR[j]], [girdle[i], breakR[j], girdle[j]]);
+  }
+  // Break → culet: N triangles
+  for (let i = 0; i < N; i++) {
+    T.push([breakR[i], culet, breakR[(i + 1) % N]]);
+  }
+
+  // Index pavilion triangles
+  const pavPos: number[] = [], pavIdx: number[] = [];
+  const eps = 1e-5;
+  const vm = new Map<string, number>();
+  function addV(p: THREE.Vector3): number {
+    const k = `${Math.round(p.x / eps)},${Math.round(p.y / eps)},${Math.round(p.z / eps)}`;
+    const hit = vm.get(k); if (hit !== undefined) return hit;
+    const id = pavPos.length / 3;
+    pavPos.push(p.x, p.y, p.z); vm.set(k, id); return id;
+  }
+  for (const [a, b, c] of T) pavIdx.push(addV(a), addV(b), addV(c));
+
+  // Merge crown + pavilion
+  const combPos = new Float32Array(nPos.length + pavPos.length);
+  combPos.set(nPos); combPos.set(pavPos, nPos.length);
+  const combIdx = new Uint32Array(nIdx.length + pavIdx.length);
+  combIdx.set(nIdx);
+  for (let i = 0; i < pavIdx.length; i++) combIdx[nIdx.length + i] = pavIdx[i] + pos.count;
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(combPos, 3));
+  geo.setIndex(new THREE.BufferAttribute(combIdx, 1));
+  return geo;
+}
+
+// ── Princess hybrid: GLB crown (tail-clipped, ~12K tris) + square pavilion ──
+// Same max-radius girdle detection as cushion. Square girdle naturally produces
+// a pavilion whose 16 kite facets follow the square outline of the princess cut.
+function buildPrincessHybridGeo(princessScene: THREE.Group): THREE.BufferGeometry {
+  let crownMesh: THREE.Mesh | null = null;
+  princessScene.traverse((node) => {
+    if (!crownMesh && (node as THREE.Mesh).isMesh) crownMesh = node as THREE.Mesh;
+  });
+  if (!crownMesh) return new THREE.BufferGeometry();
+
+  const srcGeo = (crownMesh as THREE.Mesh).geometry;
+  const pos = srcGeo.getAttribute('position') as THREE.BufferAttribute;
+
+  // Normalize: bottom-most vertex → Y=0, max XZ radius → 1.0
+  let minY = Infinity, maxX = -Infinity, minX = Infinity, maxZ = -Infinity, minZ = Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x; if (x < minX) minX = x;
+    if (z > maxZ) maxZ = z; if (z < minZ) minZ = z;
+  }
+  const sc = 1.0 / (Math.max(maxX - minX, maxZ - minZ) / 2);
+  const yShift = -minY * sc;
+
+  const nPos = new Float32Array(pos.count * 3);
+  let crownMaxY = -Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    nPos[i * 3]     = pos.getX(i) * sc;
+    nPos[i * 3 + 1] = pos.getY(i) * sc + yShift;
+    nPos[i * 3 + 2] = pos.getZ(i) * sc;
+    if (nPos[i * 3 + 1] > crownMaxY) crownMaxY = nPos[i * 3 + 1];
+  }
+  const srcIdx = srcGeo.getIndex()!;
+  const nIdx = new Uint32Array(srcIdx.count);
+  for (let i = 0; i < srcIdx.count; i++) nIdx[i] = srcIdx.getX(i);
+
+  // Find true girdle ring and resample to 16 points
+  const girdleRaw = extractGirdle(nPos, pos.count, crownMaxY);
+  const N = 16;
+  const girdle = resampleGirdle(girdleRaw, N);
+
+  // Princess pavilion: shallower depth, tighter break ring for square silhouette
+  const girdleY = girdle.reduce((s, p) => s + p.y, 0) / N;
+  const pavH   = 1.05;
+  const yBreak = girdleY - pavH * 0.50;
+  const yC     = girdleY - pavH;
+  const breakR = girdle.map(p => new THREE.Vector3(p.x * 0.38, yBreak, p.z * 0.38));
+  const culet  = new THREE.Vector3(0, yC, 0);
+
+  type Tri = [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+  const T: Tri[] = [];
+  for (let i = 0; i < N; i++) {
+    const j = (i + 1) % N;
+    T.push([girdle[i], breakR[i], breakR[j]], [girdle[i], breakR[j], girdle[j]]);
+  }
+  for (let i = 0; i < N; i++) {
+    T.push([breakR[i], culet, breakR[(i + 1) % N]]);
+  }
+
+  const pavPos: number[] = [], pavIdx: number[] = [];
+  const eps = 1e-5;
+  const vm = new Map<string, number>();
+  function addV(p: THREE.Vector3): number {
+    const k = `${Math.round(p.x / eps)},${Math.round(p.y / eps)},${Math.round(p.z / eps)}`;
+    const hit = vm.get(k); if (hit !== undefined) return hit;
+    const id = pavPos.length / 3;
+    pavPos.push(p.x, p.y, p.z); vm.set(k, id); return id;
+  }
+  for (const [a, b, c] of T) pavIdx.push(addV(a), addV(b), addV(c));
+
+  const combPos = new Float32Array(nPos.length + pavPos.length);
+  combPos.set(nPos); combPos.set(pavPos, nPos.length);
+  const combIdx = new Uint32Array(nIdx.length + pavIdx.length);
+  combIdx.set(nIdx);
+  for (let i = 0; i < pavIdx.length; i++) combIdx[nIdx.length + i] = pavIdx[i] + pos.count;
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(combPos, 3));
+  geo.setIndex(new THREE.BufferAttribute(combIdx, 1));
+  return geo;
+}
+
+// ── Marquise hybrid: GLB crown (X-axis-oriented) + proportionate pavilion ──
+// Remap X→Y so Y-up normalisation works, then add a shallow pavilion whose
+// break ring and depth are tuned to match the marquise's elongated outline.
+function buildMarquiseHybridGeo(marquiseScene: THREE.Group): THREE.BufferGeometry {
+  let crownMesh: THREE.Mesh | null = null;
+  marquiseScene.traverse((node) => {
+    if (!crownMesh && (node as THREE.Mesh).isMesh) crownMesh = node as THREE.Mesh;
+  });
+  if (!crownMesh) return new THREE.BufferGeometry();
+
+  const srcGeo = (crownMesh as THREE.Mesh).geometry;
+  const pos = srcGeo.getAttribute('position') as THREE.BufferAttribute;
+
+  // Remap: old X (height) → new Y; old Y (long axis) → new X; old Z unchanged.
+  let minY = Infinity, maxX = -Infinity, minX = Infinity, maxZ = -Infinity, minZ = Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getY(i), y = pos.getX(i), z = pos.getZ(i);
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x; if (x < minX) minX = x;
+    if (z > maxZ) maxZ = z; if (z < minZ) minZ = z;
+  }
+  const sc = 1.0 / (Math.max(maxX - minX, maxZ - minZ) / 2);
+  const yShift = -minY * sc;
+
+  const nPos = new Float32Array(pos.count * 3);
+  let crownMaxY = -Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    nPos[i * 3]     = pos.getY(i) * sc;
+    nPos[i * 3 + 1] = pos.getX(i) * sc + yShift;
+    nPos[i * 3 + 2] = pos.getZ(i) * sc;
+    if (nPos[i * 3 + 1] > crownMaxY) crownMaxY = nPos[i * 3 + 1];
+  }
+  const srcIdx = srcGeo.getIndex()!;
+  const nIdx = new Uint32Array(srcIdx.count);
+  for (let i = 0; i < srcIdx.count; i++) nIdx[i] = srcIdx.getX(i);
+
+  // 24 sectors to faithfully trace the pointed marquise tips around the girdle
+  const girdleRaw = extractGirdle(nPos, pos.count, crownMaxY);
+  const N = 24;
+  const girdle = resampleGirdle(girdleRaw, N);
+
+  const girdleY = girdle.reduce((s, p) => s + p.y, 0) / N;
+  const pavH   = 0.92;
+  const yBreak = girdleY - pavH * 0.50;
+  const yC     = girdleY - pavH;
+  const breakR = girdle.map(p => new THREE.Vector3(p.x * 0.42, yBreak, p.z * 0.42));
+  const culet  = new THREE.Vector3(0, yC, 0);
+
+  type Tri = [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+  const T: Tri[] = [];
+  for (let i = 0; i < N; i++) {
+    const j = (i + 1) % N;
+    T.push([girdle[i], breakR[i], breakR[j]], [girdle[i], breakR[j], girdle[j]]);
+  }
+  for (let i = 0; i < N; i++) {
+    T.push([breakR[i], culet, breakR[(i + 1) % N]]);
+  }
+
+  const pavPos: number[] = [], pavIdx: number[] = [];
+  const eps = 1e-5;
+  const vm = new Map<string, number>();
+  function addV(p: THREE.Vector3): number {
+    const k = `${Math.round(p.x / eps)},${Math.round(p.y / eps)},${Math.round(p.z / eps)}`;
+    const hit = vm.get(k); if (hit !== undefined) return hit;
+    const id = pavPos.length / 3;
+    pavPos.push(p.x, p.y, p.z); vm.set(k, id); return id;
+  }
+  for (const [a, b, c] of T) pavIdx.push(addV(a), addV(b), addV(c));
+
+  const combPos = new Float32Array(nPos.length + pavPos.length);
+  combPos.set(nPos); combPos.set(pavPos, nPos.length);
+  const combIdx = new Uint32Array(nIdx.length + pavIdx.length);
+  combIdx.set(nIdx);
+  for (let i = 0; i < pavIdx.length; i++) combIdx[nIdx.length + i] = pavIdx[i] + pos.count;
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(combPos, 3));
+  geo.setIndex(new THREE.BufferAttribute(combIdx, 1));
+  return geo;
+}
+
 function getStoneGeo(
   stonesScene: THREE.Group,
   meshName: string
@@ -313,42 +701,88 @@ function buildStoneGroup(
   stoneKey: string,
   radius: number,
   envIntensity: number,
-  transmission: number
+  transmission: number,
+  cushionScene?: THREE.Group,
+  princessScene?: THREE.Group,
+  roundScene?: THREE.Group,
+  marquiseScene?: THREE.Group,
+  useTripoStones = false
 ): THREE.Group {
-  const meshName = STONE_MESH_NAME[stoneKey] ?? "stone_round";
-  let geo = getStoneGeo(stonesScene, meshName);
-  if (!geo)
-    stonesScene.traverse((node) => {
+  const isCushion  = useTripoStones && stoneKey === 'cushion';
+  const isPrincess = useTripoStones && stoneKey === 'princess';
+  const isRound    = useTripoStones && stoneKey === 'round';
+  const isMarquise = useTripoStones && stoneKey === 'marquise';
+  const isTripo    = isCushion || isPrincess || isRound || isMarquise;
+
+  const effectiveTrans = isTripo ? 0 : transmission;
+  const mat = makeDiamondMat(isTripo ? envIntensity * 1.4 : envIntensity, effectiveTrans, stoneKey);
+  if (isTripo) {
+    mat.roughness                = 0.0;
+    mat.clearcoat                = 1.0;
+    mat.clearcoatRoughness       = 0.0;
+    mat.reflectivity             = 1.0;
+    mat.iridescence              = 0.85;
+    mat.iridescenceIOR           = 2.42;
+    mat.iridescenceThicknessRange = [100, 400];
+    mat.envMapIntensity          = envIntensity * 1.8;
+    mat.needsUpdate              = true;
+  }
+
+  // Cache key includes ':t' suffix for Tripo stones to avoid colliding with
+  // the stones.glb fallback geometry when navigating between pages.
+  const cacheKey = isTripo ? stoneKey + ':t' : stoneKey;
+  const cached = subdivGeoCache.get(cacheKey);
+  let meshGeo: THREE.BufferGeometry;
+
+  if (cached) {
+    meshGeo = cached.clone();
+  } else if (isCushion && cushionScene) {
+    const g = buildCushionHybridGeo(cushionScene);
+    subdivGeoCache.set(cacheKey, g);
+    meshGeo = g.clone();
+  } else if (isPrincess && princessScene) {
+    const g = buildPrincessHybridGeo(princessScene);
+    subdivGeoCache.set(cacheKey, g);
+    meshGeo = g.clone();
+  } else if (isRound && roundScene) {
+    const g = buildRoundStoneGeo(roundScene);
+    subdivGeoCache.set(cacheKey, g);
+    meshGeo = g.clone();
+  } else if (isMarquise && marquiseScene) {
+    const g = buildMarquiseHybridGeo(marquiseScene);
+    subdivGeoCache.set(cacheKey, g);
+    meshGeo = g.clone();
+  } else {
+    const meshName = STONE_MESH_NAME[stoneKey] ?? "stone_round";
+    let geo = getStoneGeo(stonesScene, meshName);
+    if (!geo) stonesScene.traverse((node) => {
       if (geo) return;
       const m = node as THREE.Mesh;
       if (m.isMesh) geo = m.geometry;
     });
-
-  // Match every stone's face-up diameter to pear's so they all look the same size.
-  const pearGeo = getStoneGeo(stonesScene, "stone_pear");
-  const pearSize  = pearGeo ? faceUpSize(pearGeo) : 1;
-  const stoneSize = faceUpSize(geo as THREE.BufferGeometry);
-  const sizeMatch = stoneSize > 0 ? pearSize / stoneSize : 1;
-
-  const mat = makeDiamondMat(envIntensity, transmission);
-
-  // 2-pass subdivision cached per shape key — runs once per shape ever.
-  const cached = subdivGeoCache.get(stoneKey);
-  let meshGeo: THREE.BufferGeometry;
-  if (cached) {
-    meshGeo = cached.clone();
-  } else {
-    let sg = (geo as unknown as THREE.BufferGeometry).clone();
+    let sg = (geo as THREE.BufferGeometry).clone();
     sg = subdivide(sg); sg = subdivide(sg);
-    subdivGeoCache.set(stoneKey, sg);
+    subdivGeoCache.set(cacheKey, sg);
     meshGeo = sg.clone();
   }
 
+  // Match face-up diameter to pear so all stones appear the same size
+  const pearGeo = getStoneGeo(stonesScene, "stone_pear");
+  const pearSize  = pearGeo ? faceUpSize(pearGeo) : 1;
+  const stoneSize = faceUpSize(meshGeo);
+  const sizeMatch = stoneSize > 0 ? pearSize / stoneSize : 1;
+
   const mesh = new THREE.Mesh(meshGeo, mat);
-  mesh.position.y = 0.14;
+  mesh.position.y = isMarquise ? -0.08 : 0.14;
   const g = new THREE.Group();
   g.add(mesh);
-  g.scale.setScalar(radius * 1.22 * sizeMatch);
+  const stoneScaleOverride = isPrincess ? 0.82 : 1.0;
+  const baseScale = radius * 1.22 * sizeMatch * stoneScaleOverride;
+  if (isMarquise) {
+    g.scale.set(baseScale * 0.92, baseScale * 0.78, baseScale * 0.92);
+  } else {
+    g.scale.setScalar(baseScale);
+  }
   return g;
 }
 
@@ -375,6 +809,7 @@ interface RingMeshProps {
   mouseRef?: MutableRefObject<{ x: number; y: number }>;
   onReady?: () => void;
   showLights?: boolean;
+  useTripoStones?: boolean;
 }
 
 export function RingMesh({
@@ -387,6 +822,7 @@ export function RingMesh({
   mouseRef,
   onReady,
   showLights = true,
+  useTripoStones = false,
 }: RingMeshProps) {
   const groupRef = useRef<THREE.Group>(null);
   const bandMaterialRef = useRef<THREE.MeshPhysicalMaterial | null>(null);
@@ -394,6 +830,10 @@ export function RingMesh({
   const isInitialMountRef = useRef(true);
   const { scene } = useGLTF("/models/ring-parts.glb");
   const { scene: stonesScene } = useGLTF("/models/stones.glb?v=2");
+  const { scene: cushionCrownScene }   = useGLTF("/models/cushion-crown.glb?v=3")    as { scene: THREE.Group };
+  const { scene: princessCrownScene }  = useGLTF("/models/princess-crown.glb?v=1")  as { scene: THREE.Group };
+  const { scene: roundStoneScene }     = useGLTF("/models/round-stone.glb?v=1")     as { scene: THREE.Group };
+  const { scene: marquiseCrownScene }  = useGLTF("/models/marquise-crown.glb?v=1")  as { scene: THREE.Group };
   const clonedScene = useRef<THREE.Group>(null!);
   if (!clonedScene.current)
     clonedScene.current = scene.clone(true) as THREE.Group;
@@ -603,7 +1043,12 @@ export function RingMesh({
       stoneKey,
       seatRadius,
       stoneEnvIntensity,
-      stoneTransmission
+      stoneTransmission,
+      cushionCrownScene,
+      princessCrownScene,
+      roundStoneScene,
+      marquiseCrownScene,
+      useTripoStones
     );
     diamond.position.copy(seatCenter);
     const parent = clonedScene.current;
@@ -640,7 +1085,12 @@ export function RingMesh({
       stoneKey,
       r,
       stoneEnvIntensity,
-      stoneTransmission
+      stoneTransmission,
+      cushionCrownScene,
+      princessCrownScene,
+      roundStoneScene,
+      marquiseCrownScene,
+      useTripoStones
     );
     diamond.position.copy(pos);
     parent.add(diamond);

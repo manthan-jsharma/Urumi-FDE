@@ -64,26 +64,26 @@ function RingScene({ onReady }: { onReady: () => void }) {
 
   return (
     <Canvas
-      camera={{ position: [0, 0.5, 3.5], fov: 40 }}
-      gl={{ antialias: true, alpha: false, toneMapping: 4, toneMappingExposure: 0.72 }}
+      camera={{ position: [0, 6.5, 0.3], fov: 48 }}
+      gl={{ antialias: false, alpha: false, toneMapping: 4, toneMappingExposure: 0.72 }}
       dpr={[1, 1.5]}
       shadows
     >
       <color attach="background" args={['#0d0d0d']} />
       <Suspense fallback={null}>
         <LightTentEnvironment delay={600} />
-        <spotLight position={[5, 8, 3]} intensity={2.5} angle={0.35} penumbra={0.8} castShadow shadow-mapSize={[1024, 1024]} />
+        <spotLight position={[5, 8, 3]} intensity={2.5} angle={0.35} penumbra={0.8} castShadow shadow-mapSize={[256, 256]} />
         <ambientLight intensity={0.12} />
-        <RingMesh metalKey={metal} stoneKey={stone} autoRotate={!userInteracting} onReady={onReady} stoneTransmission={0.72} />
+        <RingMesh metalKey={metal} stoneKey={stone} autoRotate={!userInteracting} onReady={onReady} stoneTransmission={0.72} useTripoStones />
         <Pedestal />
-        <ContactShadows position={[0, -0.92, 0]} opacity={0.5} scale={2.8} blur={2} far={1.0} />
+        <ContactShadows position={[0, -0.92, 0]} opacity={0.5} scale={2.8} blur={2} far={1.0} frames={1} />
         <FloatingCallout metal={metal} stone={stone} visible={showCallout} />
-        <PostFX vignette={0.5} bloom dofFocusDistance={3.5} dofFocusRange={1.2} dofBokeh={0.35} dof />
+        <PostFX vignette={0.5} />
       </Suspense>
       <OrbitControls
         enablePan={false}
-        minPolarAngle={Math.PI / 4}
-        maxPolarAngle={Math.PI / 1.8}
+        minPolarAngle={0}
+        maxPolarAngle={Math.PI}
         minDistance={2}
         maxDistance={6}
         dampingFactor={0.05}
