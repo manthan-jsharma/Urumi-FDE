@@ -13,7 +13,6 @@ useGLTF.preload("/models/cushion-crown.glb?v=5");
 useGLTF.preload("/models/princess-crown.glb?v=1");
 useGLTF.preload("/models/round-stone.glb?v=1");
 useGLTF.preload("/models/marquise-crown.glb?v=2");
-useGLTF.preload("/models/pear-crown.glb?v=1");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Diamond material — flatShading gives each facet its own normal, producing the
@@ -1004,7 +1003,6 @@ function extractStoneData(
   roundScene?: THREE.Group,
   marquiseScene?: THREE.Group,
   useTripoStones = false,
-  pearScene?: THREE.Group,
 ): StoneData {
   const isCushion = useTripoStones && stoneKey === "cushion";
   const isPrincess = useTripoStones && stoneKey === "princess";
@@ -1126,9 +1124,6 @@ export function RingMesh({
   const { scene: marquiseCrownScene } = useGLTF(
     "/models/marquise-crown.glb?v=2"
   ) as { scene: THREE.Group };
-  const { scene: pearCrownScene } = useGLTF("/models/pear-crown.glb?v=1") as {
-    scene: THREE.Group;
-  };
   const clonedScene = useRef<THREE.Group>(null!);
   if (!clonedScene.current)
     clonedScene.current = scene.clone(true) as THREE.Group;
@@ -1374,7 +1369,7 @@ export function RingMesh({
     const data = extractStoneData(
       stonesScene, stoneKey, seatRadius,
       cushionCrownScene, princessCrownScene, roundStoneScene,
-      marquiseCrownScene, useTripoStones, pearCrownScene,
+      marquiseCrownScene, useTripoStones,
     );
     prevStoneGeoRef.current = data.geo;
     setStoneData(data);
@@ -1412,7 +1407,7 @@ export function RingMesh({
     const data = extractStoneData(
       stonesScene, stoneKey, r,
       cushionCrownScene, princessCrownScene, roundStoneScene,
-      marquiseCrownScene, useTripoStones, pearCrownScene,
+      marquiseCrownScene, useTripoStones,
     );
     prevStoneGeoRef.current = data.geo;
     setStoneData(data);
