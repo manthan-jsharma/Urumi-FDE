@@ -9,7 +9,7 @@ import { METAL_CONFIGS } from "@/lib/materials";
 
 useGLTF.preload("/models/ring-parts.glb");
 useGLTF.preload("/models/stones.glb?v=2");
-useGLTF.preload("/models/cushion-crown.glb?v=4");
+useGLTF.preload("/models/cushion-crown.glb?v=5");
 useGLTF.preload("/models/princess-crown.glb?v=1");
 useGLTF.preload("/models/round-stone.glb?v=1");
 useGLTF.preload("/models/marquise-crown.glb?v=2");
@@ -830,7 +830,7 @@ export function RingMesh({
   const isInitialMountRef = useRef(true);
   const { scene } = useGLTF("/models/ring-parts.glb");
   const { scene: stonesScene } = useGLTF("/models/stones.glb?v=2");
-  const { scene: cushionCrownScene }   = useGLTF("/models/cushion-crown.glb?v=4")   as { scene: THREE.Group };
+  const { scene: cushionCrownScene }   = useGLTF("/models/cushion-crown.glb?v=5")   as { scene: THREE.Group };
   const { scene: princessCrownScene }  = useGLTF("/models/princess-crown.glb?v=1") as { scene: THREE.Group };
   const { scene: roundStoneScene }     = useGLTF("/models/round-stone.glb?v=1")    as { scene: THREE.Group };
   const { scene: marquiseCrownScene }  = useGLTF("/models/marquise-crown.glb?v=2") as { scene: THREE.Group };
