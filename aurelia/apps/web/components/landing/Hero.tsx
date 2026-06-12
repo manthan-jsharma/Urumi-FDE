@@ -75,17 +75,6 @@ export function Hero({ onReady }: { onReady?: () => void }) {
   // from two simultaneous WebGL scenes (Hero + FinalCTA both at 60fps).
   const [canvasActive, setCanvasActive] = useState(true);
 
-  // ── Canvas visibility — pause when section leaves viewport ───────
-  useEffect(() => {
-    const section = sectionRef.current;
-    if (!section) return;
-    const io = new IntersectionObserver(
-      ([entry]) => setCanvasActive(entry.isIntersecting),
-      { threshold: 0 }
-    );
-    io.observe(section);
-    return () => io.disconnect();
-  }, []);
 
   // ── Entry animation ────────────────────────────────────────────
   useEffect(() => {
@@ -174,6 +163,10 @@ export function Hero({ onReady }: { onReady?: () => void }) {
       end: "+=520%",
       pin: true,
       scrub: 1,
+      // Pause canvas at end of Hero scroll — before unpin layout shift,
+      // so WebGL isn't running when HorizontalFeatures initialises.
+      onLeave: () => setCanvasActive(false),
+      onEnterBack: () => setCanvasActive(true),
       onUpdate: (self) => {
         const p = self.progress;
 
@@ -291,10 +284,10 @@ export function Hero({ onReady }: { onReady?: () => void }) {
         // Perspective projection at each phase boundary gives:
         //   p=0.75 (Phase 4 start): cam [0,-0.2,2.6] lookAt y=0.45 → stone ~47% screen-Y
         //   p=1.00 (Phase 4 end):   cam [0,-0.4,1.4] lookAt y=0.35 → stone ~37% screen-Y
-        {
+        if (spotlightRef.current) {
           const spotT = Math.max(0, (p - 0.75) / 0.25)
           const spotY = (47 - spotT * 10).toFixed(1)
-          spotlightRef.current!.style.background =
+          spotlightRef.current.style.background =
             `radial-gradient(ellipse 18% 14% at 50% ${spotY}%, rgba(255,248,220,0.22) 0%, rgba(220,180,80,0.08) 50%, transparent 100%)`
         }
       },

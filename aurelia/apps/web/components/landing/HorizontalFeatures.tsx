@@ -553,7 +553,6 @@ export function HorizontalFeatures() {
         pin: true,
         scrub: true,
         end: () => `+=${track.scrollWidth - window.innerWidth}`,
-        invalidateOnRefresh: true,
       },
     })
 
