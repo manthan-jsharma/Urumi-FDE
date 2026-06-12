@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, MutableRefObject } from "react";
+import { useRef, useEffect, useState, useLayoutEffect, useMemo, MutableRefObject } from "react";
 import { useGLTF } from "@react-three/drei";
 import { useSpring } from "@react-spring/three";
 import { useFrame } from "@react-three/fiber";
@@ -13,6 +13,7 @@ useGLTF.preload("/models/cushion-crown.glb?v=5");
 useGLTF.preload("/models/princess-crown.glb?v=1");
 useGLTF.preload("/models/round-stone.glb?v=1");
 useGLTF.preload("/models/marquise-crown.glb?v=2");
+useGLTF.preload("/models/pear-crown.glb?v=1");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Diamond material — flatShading gives each facet its own normal, producing the
@@ -104,6 +105,7 @@ uniform float uGrid;
 uniform float uCoarseFreq;
 uniform float uFineFreq;
 uniform float uDentStrength;
+uniform float uTime;
 
 // Compress the stretch-axis component so FBM features elongate along that axis.
 vec3 _warpAniso( vec3 p ) {
@@ -158,13 +160,40 @@ vec4 _fbmG( vec3 p ) {
   }
   return r;
 }
+
+// 3D Voronoi — XZ-plane neighbor search only (9 iterations instead of 27).
+// Each cell still has a fully 3D random site so gradients have Y variation.
+// 3× cheaper than full 3D search; visually identical for face-up stone views.
+vec4 _voroG( vec3 p ) {
+  vec3  ip = floor( p );
+  vec3  fp = fract( p );
+  float F1 = 8.0;
+  vec3  g1 = vec3( 1.0, 0.0, 0.0 );
+  for ( int j = -1; j <= 1; j++ )
+  for ( int i = -1; i <= 1; i++ ) {
+    vec3  n  = vec3( float(i), 0.0, float(j) );
+    vec3  rp = vec3(
+      _hsh( ip + n ),
+      _hsh( ip + n + vec3( 17.0, 31.0,  7.0 ) ),
+      _hsh( ip + n + vec3( 53.0, 11.0, 43.0 ) )
+    );
+    vec3  d   = n + rp - fp;
+    float dst = dot( d, d );
+    if ( dst < F1 ) { F1 = dst; g1 = d; }
+  }
+  return vec4( sqrt( F1 ), g1 );
+}
 `;
 
 const MICRO_DENTS_GLSL = /* glsl */ `
 {
   vec3 _wp    = _warpAniso( vObjectPos );
-  vec3 _bumpA = _fbmG( _wp * uCoarseFreq ).yzw;
-  vec3 _bumpB = _fbmG( _wp * uFineFreq   ).yzw;
+  // Voronoi coarse layer — hard-edged polygonal cells, each a distinct flat facet.
+  // Fine + ultra-fine FBM drift over time for sparkle within each cell.
+  vec3 _drift = vec3( sin(uTime*0.11), cos(uTime*0.07), sin(uTime*0.13+1.57) ) * 0.07;
+  vec3 _voroN = normalize( _voroG( _wp * uCoarseFreq ).yzw );
+  vec3 _bumpB = _fbmG( _wp * uFineFreq + _drift            ).yzw;
+  vec3 _bumpC = _fbmG( _wp * uFineFreq * 3.5 + _drift*2.2 ).yzw;
 
   // Princess-cut grid: derivative of cos(x*f)*cos(z*f) — axis-aligned cross-hatch.
   float _gf    = 28.0;
@@ -175,48 +204,95 @@ const MICRO_DENTS_GLSL = /* glsl */ `
   );
 
   normal = normalize( normal
-    + normalize( _bumpA ) * 0.30 * uDentStrength
-    + normalize( _bumpB ) * 0.14 * uDentStrength
-    + normalize( _gridB ) * uGrid );
+    + _voroN               * 0.55 * uDentStrength
+    + normalize( _bumpB )  * 0.22 * uDentStrength
+    + _bumpC               * 0.12 * uDentStrength
+    + normalize( _gridB )  * uGrid );
 }
 `;
 
 // Per-stone FBM pattern params — uniforms give each shape a distinctive dent
 // without extra shader compilations (one cacheKey, different uniform values).
-const STONE_PATTERNS: Record<string, {
-  axis: [number, number, number];
-  stretch: number;
-  grid: number;
-  coarseFreq: number;
-  fineFreq: number;
-  dentStrength: number;
-}> = {
-  round:    { axis: [1, 0, 0], stretch: 1.0, grid: 0.00, coarseFreq:  8.0, fineFreq: 32.0, dentStrength: 1.0 },
-  oval:     { axis: [1, 0, 0], stretch: 2.5, grid: 0.00, coarseFreq:  7.0, fineFreq: 28.0, dentStrength: 1.0 },
-  princess: { axis: [1, 0, 0], stretch: 1.0, grid: 0.28, coarseFreq: 10.0, fineFreq: 38.0, dentStrength: 1.0 },
-  cushion:  { axis: [1, 0, 0], stretch: 1.0, grid: 0.00, coarseFreq:  4.5, fineFreq: 18.0, dentStrength: 1.0 },
-  marquise: { axis: [1, 0, 0], stretch: 3.2, grid: 0.00, coarseFreq:  7.0, fineFreq: 28.0, dentStrength: 1.0 },
-  pear:     { axis: [1, 0, 0], stretch: 2.0, grid: 0.00, coarseFreq:  7.5, fineFreq: 30.0, dentStrength: 1.0 },
+const STONE_PATTERNS: Record<
+  string,
+  {
+    axis: [number, number, number];
+    stretch: number;
+    grid: number;
+    coarseFreq: number;
+    fineFreq: number;
+    dentStrength: number;
+  }
+> = {
+  round: {
+    axis: [1, 0, 0],
+    stretch: 1.0,
+    grid: 0.0,
+    coarseFreq: 8.0,
+    fineFreq: 32.0,
+    dentStrength: 2.0,
+  },
+  oval: {
+    axis: [1, 0, 0],
+    stretch: 2.5,
+    grid: 0.0,
+    coarseFreq: 7.0,
+    fineFreq: 28.0,
+    dentStrength: 2.0,
+  },
+  princess: {
+    axis: [1, 0, 0],
+    stretch: 1.0,
+    grid: 0.28,
+    coarseFreq: 10.0,
+    fineFreq: 38.0,
+    dentStrength: 2.0,
+  },
+  cushion: {
+    axis: [1, 0, 0],
+    stretch: 1.0,
+    grid: 0.0,
+    coarseFreq: 11.0,
+    fineFreq: 38.0,
+    dentStrength: 2.4,
+  },
+  marquise: {
+    axis: [1, 0, 0],
+    stretch: 3.2,
+    grid: 0.0,
+    coarseFreq: 11.0,
+    fineFreq: 38.0,
+    dentStrength: 2.4,
+  },
+  pear: {
+    axis: [1, 0, 0],
+    stretch: 2.0,
+    grid: 0.0,
+    coarseFreq: 7.0,
+    fineFreq: 28.0,
+    dentStrength: 2.0,
+  },
 };
 
 function makeDiamondMat(
   envIntensity = 5.5,
   transmission = 0,
-  stoneKey = 'round'
+  stoneKey = "round",
+  onShaderReady?: (uniforms: Record<string, { value: any }>) => void
 ): THREE.MeshPhysicalMaterial {
   const hasTransmission = transmission > 0;
   const mat = new THREE.MeshPhysicalMaterial({
     color: new THREE.Color("#ffffff"),
     transmission: hasTransmission ? transmission : 0,
-    thickness:    hasTransmission ? 2.8 : 0,
-    ior:          2.42,
+    thickness: hasTransmission ? 2.8 : 0,
+    ior: 2.42,
     attenuationDistance: hasTransmission ? 2.8 : 0,
-    attenuationColor:    new THREE.Color("#fdfaf5"),
+    attenuationColor: new THREE.Color("#fdfaf5"),
     roughness: 0.0,
     metalness: 0.0,
     envMapIntensity: envIntensity * (hasTransmission ? 1.25 : 1.4),
-    transparent:  hasTransmission,
-    depthWrite:  !hasTransmission,
+    transparent: hasTransmission,
+    depthWrite: !hasTransmission,
     clearcoat: 1.0,
     clearcoatRoughness: 0.0,
     reflectivity: 1.0,
@@ -229,37 +305,56 @@ function makeDiamondMat(
 
   mat.onBeforeCompile = (shader) => {
     const pat = STONE_PATTERNS[stoneKey] ?? STONE_PATTERNS.round;
-    shader.uniforms.uStretchAxis  = { value: new THREE.Vector3(pat.axis[0], pat.axis[1], pat.axis[2]) };
-    shader.uniforms.uStretch      = { value: pat.stretch };
-    shader.uniforms.uGrid         = { value: pat.grid };
-    shader.uniforms.uCoarseFreq   = { value: pat.coarseFreq };
-    shader.uniforms.uFineFreq     = { value: pat.fineFreq };
+    shader.uniforms.uStretchAxis = {
+      value: new THREE.Vector3(pat.axis[0], pat.axis[1], pat.axis[2]),
+    };
+    shader.uniforms.uStretch = { value: pat.stretch };
+    shader.uniforms.uGrid = { value: pat.grid };
+    shader.uniforms.uCoarseFreq = { value: pat.coarseFreq };
+    shader.uniforms.uFineFreq = { value: pat.fineFreq };
     shader.uniforms.uDentStrength = { value: pat.dentStrength ?? 1.0 };
+    shader.uniforms.uTime = { value: 0 };
+    onShaderReady?.(shader.uniforms);
 
     shader.vertexShader = shader.vertexShader.replace(
-      'void main() {',
+      "void main() {",
       `varying vec3 vObjectPos;\nvoid main() {`
     );
     shader.vertexShader = shader.vertexShader.replace(
-      '#include <begin_vertex>',
+      "#include <begin_vertex>",
       `#include <begin_vertex>\nvObjectPos = position;`
     );
 
     shader.fragmentShader = shader.fragmentShader.replace(
-      'void main() {',
+      "void main() {",
       `${DENTS_PREAMBLE_GLSL}\nvoid main() {`
     );
     shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <transmission_fragment>',
+      "#include <transmission_fragment>",
       DISPERSION_TRANSMISSION_GLSL
     );
     shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <normal_fragment_maps>',
+      "#include <normal_fragment_maps>",
       `#include <normal_fragment_maps>\n${MICRO_DENTS_GLSL}`
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <output_fragment>",
+      `// Warm fire for depth/grazing facets — face-on facets are pure specular white
+vec3 _vd  = normalize( -vViewPosition );
+float _fd = pow( 1.0 - max( dot( normal, _vd ), 0.0 ), 2.5 );
+outgoingLight += vec3( 1.0, 0.72, 0.30 ) * _fd * 0.35;
+
+// Rainbow dispersion — purely depth-dependent, NO flat additive.
+vec3  _rvn  = normalize( _voroG( _warpAniso( vObjectPos ) * uCoarseFreq ).yzw );
+float _rhue = atan( _rvn.z, _rvn.x ) * 0.15915 + 0.5;
+vec3  _disp = 0.5 + 0.5 * cos( 6.28318 * ( _rhue + vec3( 0.0, 0.333, 0.667 ) ) );
+outgoingLight += _disp * _fd * 0.70;
+
+#include <output_fragment>`
     );
   };
   // All diamond materials share one compiled program — stable cache key
-  mat.customProgramCacheKey = () => 'diamond-v3';
+  mat.customProgramCacheKey = () => "diamond-v3";
 
   return mat;
 }
@@ -280,7 +375,7 @@ const STONE_MESH_NAME: Record<string, string> = {
 function subdivide(geo: THREE.BufferGeometry): THREE.BufferGeometry {
   const idx = geo.getIndex();
   if (!idx) return geo;
-  const src = geo.getAttribute('position') as THREE.BufferAttribute;
+  const src = geo.getAttribute("position") as THREE.BufferAttribute;
 
   const newPos: number[] = [];
   const newIdx: number[] = [];
@@ -304,13 +399,17 @@ function subdivide(geo: THREE.BufferGeometry): THREE.BufferGeometry {
   }
 
   for (let i = 0; i < idx.count; i += 3) {
-    const a = idx.getX(i), b = idx.getX(i + 1), c = idx.getX(i + 2);
-    const ab = mid(a, b), bc = mid(b, c), ca = mid(c, a);
+    const a = idx.getX(i),
+      b = idx.getX(i + 1),
+      c = idx.getX(i + 2);
+    const ab = mid(a, b),
+      bc = mid(b, c),
+      ca = mid(c, a);
     newIdx.push(a, ab, ca, ab, b, bc, ca, bc, c, ab, bc, ca);
   }
 
   const out = new THREE.BufferGeometry();
-  out.setAttribute('position', new THREE.Float32BufferAttribute(newPos, 3));
+  out.setAttribute("position", new THREE.Float32BufferAttribute(newPos, 3));
   out.setIndex(newIdx);
   return out;
 }
@@ -338,10 +437,13 @@ function extractGirdle(
   type Best = { x: number; y: number; z: number; r: number; a: number };
   const sectors: (Best | null)[] = new Array(N_SECTORS).fill(null);
   for (let i = 0; i < count; i++) {
-    const x = nPos[i * 3], y = nPos[i * 3 + 1], z = nPos[i * 3 + 2];
+    const x = nPos[i * 3],
+      y = nPos[i * 3 + 1],
+      z = nPos[i * 3 + 2];
     if (y > midY) continue;
     const r = Math.sqrt(x * x + z * z);
-    let a = Math.atan2(z, x); if (a < 0) a += Math.PI * 2;
+    let a = Math.atan2(z, x);
+    if (a < 0) a += Math.PI * 2;
     const s = Math.floor((a / (Math.PI * 2)) * N_SECTORS) % N_SECTORS;
     if (!sectors[s] || r > sectors[s]!.r) {
       sectors[s] = { x, y, z, r, a: (s / N_SECTORS) * Math.PI * 2 };
@@ -363,9 +465,12 @@ function resampleGirdle(
     const tgt = (i / N) * Math.PI * 2;
     if (!M) return new THREE.Vector3(Math.cos(tgt), 0, Math.sin(tgt));
     let lo = 0;
-    for (let j = 0; j < M; j++) { if (raw[j].a <= tgt) lo = j; }
+    for (let j = 0; j < M; j++) {
+      if (raw[j].a <= tgt) lo = j;
+    }
     const hi = (lo + 1) % M;
-    const aLo = raw[lo].a, aHi = hi === 0 ? raw[0].a + Math.PI * 2 : raw[hi].a;
+    const aLo = raw[lo].a,
+      aHi = hi === 0 ? raw[0].a + Math.PI * 2 : raw[hi].a;
     const t = aHi > aLo + 1e-6 ? Math.min(1, (tgt - aLo) / (aHi - aLo)) : 0;
     return new THREE.Vector3(
       raw[lo].x + (raw[hi].x - raw[lo].x) * t,
@@ -381,34 +486,47 @@ function resampleGirdle(
 function buildRoundStoneGeo(roundScene: THREE.Group): THREE.BufferGeometry {
   let crownMesh: THREE.Mesh | null = null;
   roundScene.traverse((node) => {
-    if (!crownMesh && (node as THREE.Mesh).isMesh) crownMesh = node as THREE.Mesh;
+    if (!crownMesh && (node as THREE.Mesh).isMesh)
+      crownMesh = node as THREE.Mesh;
   });
   if (!crownMesh) return new THREE.BufferGeometry();
 
   const srcGeo = (crownMesh as THREE.Mesh).geometry;
-  const pos = srcGeo.getAttribute('position') as THREE.BufferAttribute;
+  const pos = srcGeo.getAttribute("position") as THREE.BufferAttribute;
 
-  let maxX = -Infinity, minX = Infinity, maxZ = -Infinity, minZ = Infinity;
+  let maxX = -Infinity,
+    minX = Infinity,
+    maxZ = -Infinity,
+    minZ = Infinity;
   for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), z = pos.getZ(i);
-    if (x > maxX) maxX = x; if (x < minX) minX = x;
-    if (z > maxZ) maxZ = z; if (z < minZ) minZ = z;
+    const x = pos.getX(i),
+      z = pos.getZ(i);
+    if (x > maxX) maxX = x;
+    if (x < minX) minX = x;
+    if (z > maxZ) maxZ = z;
+    if (z < minZ) minZ = z;
   }
   const sc = 1.0 / (Math.max(maxX - minX, maxZ - minZ) / 2);
 
   const nPos = new Float32Array(pos.count * 3);
   for (let i = 0; i < pos.count; i++) {
-    nPos[i * 3]     = pos.getX(i) * sc;
+    nPos[i * 3] = pos.getX(i) * sc;
     nPos[i * 3 + 1] = pos.getY(i) * sc;
     nPos[i * 3 + 2] = pos.getZ(i) * sc;
   }
 
   // Find the girdle (global max-radius vertex) and shift Y so it sits at Y=0
-  let maxR = 0, girdleY = 0;
+  let maxR = 0,
+    girdleY = 0;
   for (let i = 0; i < pos.count; i++) {
-    const x = nPos[i * 3], y = nPos[i * 3 + 1], z = nPos[i * 3 + 2];
+    const x = nPos[i * 3],
+      y = nPos[i * 3 + 1],
+      z = nPos[i * 3 + 2];
     const r = Math.sqrt(x * x + z * z);
-    if (r > maxR) { maxR = r; girdleY = y; }
+    if (r > maxR) {
+      maxR = r;
+      girdleY = y;
+    }
   }
   for (let i = 0; i < pos.count; i++) nPos[i * 3 + 1] -= girdleY;
 
@@ -417,7 +535,7 @@ function buildRoundStoneGeo(roundScene: THREE.Group): THREE.BufferGeometry {
   for (let i = 0; i < srcIdx.count; i++) nIdx[i] = srcIdx.getX(i);
 
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(nPos, 3));
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(nPos, 3));
   geo.setIndex(new THREE.BufferAttribute(nIdx, 1));
   return geo;
 }
@@ -425,23 +543,34 @@ function buildRoundStoneGeo(roundScene: THREE.Group): THREE.BufferGeometry {
 // ── Cushion hybrid: GLB crown (13K tris) + faceted pavilion ─────────────────
 // Uses max-radius girdle detection so the pavilion top ring connects exactly at
 // the crown's widest point — no gap, no step at the seam.
-function buildCushionHybridGeo(cushionScene: THREE.Group): THREE.BufferGeometry {
+function buildCushionHybridGeo(
+  cushionScene: THREE.Group
+): THREE.BufferGeometry {
   let crownMesh: THREE.Mesh | null = null;
   cushionScene.traverse((node) => {
-    if (!crownMesh && (node as THREE.Mesh).isMesh) crownMesh = node as THREE.Mesh;
+    if (!crownMesh && (node as THREE.Mesh).isMesh)
+      crownMesh = node as THREE.Mesh;
   });
   if (!crownMesh) return new THREE.BufferGeometry();
 
   const srcGeo = (crownMesh as THREE.Mesh).geometry;
-  const pos = srcGeo.getAttribute('position') as THREE.BufferAttribute;
+  const pos = srcGeo.getAttribute("position") as THREE.BufferAttribute;
 
   // Normalize: bottom-most vertex → Y=0, max XZ radius → 1.0
-  let minY = Infinity, maxX = -Infinity, minX = Infinity, maxZ = -Infinity, minZ = Infinity;
+  let minY = Infinity,
+    maxX = -Infinity,
+    minX = Infinity,
+    maxZ = -Infinity,
+    minZ = Infinity;
   for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const x = pos.getX(i),
+      y = pos.getY(i),
+      z = pos.getZ(i);
     if (y < minY) minY = y;
-    if (x > maxX) maxX = x; if (x < minX) minX = x;
-    if (z > maxZ) maxZ = z; if (z < minZ) minZ = z;
+    if (x > maxX) maxX = x;
+    if (x < minX) minX = x;
+    if (z > maxZ) maxZ = z;
+    if (z < minZ) minZ = z;
   }
   const sc = 1.0 / (Math.max(maxX - minX, maxZ - minZ) / 2);
   const yShift = -minY * sc;
@@ -449,7 +578,7 @@ function buildCushionHybridGeo(cushionScene: THREE.Group): THREE.BufferGeometry 
   const nPos = new Float32Array(pos.count * 3);
   let crownMaxY = -Infinity;
   for (let i = 0; i < pos.count; i++) {
-    nPos[i * 3]     = pos.getX(i) * sc;
+    nPos[i * 3] = pos.getX(i) * sc;
     nPos[i * 3 + 1] = pos.getY(i) * sc + yShift;
     nPos[i * 3 + 2] = pos.getZ(i) * sc;
     if (nPos[i * 3 + 1] > crownMaxY) crownMaxY = nPos[i * 3 + 1];
@@ -465,11 +594,13 @@ function buildCushionHybridGeo(cushionScene: THREE.Group): THREE.BufferGeometry 
 
   // Pavilion drops from actual girdle Y (not forced 0) so it meets the crown flush
   const girdleY = girdle.reduce((s, p) => s + p.y, 0) / N;
-  const pavH   = 1.2;
+  const pavH = 1.2;
   const yBreak = girdleY - pavH * 0.52;
-  const yC     = girdleY - pavH;
-  const breakR = girdle.map(p => new THREE.Vector3(p.x * 0.42, yBreak, p.z * 0.42));
-  const culet  = new THREE.Vector3(0, yC, 0);
+  const yC = girdleY - pavH;
+  const breakR = girdle.map(
+    (p) => new THREE.Vector3(p.x * 0.42, yBreak, p.z * 0.42)
+  );
+  const culet = new THREE.Vector3(0, yC, 0);
 
   type Tri = [THREE.Vector3, THREE.Vector3, THREE.Vector3];
   const T: Tri[] = [];
@@ -477,7 +608,10 @@ function buildCushionHybridGeo(cushionScene: THREE.Group): THREE.BufferGeometry 
   // Girdle → break: N quads = 2N kite triangles
   for (let i = 0; i < N; i++) {
     const j = (i + 1) % N;
-    T.push([girdle[i], breakR[i], breakR[j]], [girdle[i], breakR[j], girdle[j]]);
+    T.push(
+      [girdle[i], breakR[i], breakR[j]],
+      [girdle[i], breakR[j], girdle[j]]
+    );
   }
   // Break → culet: N triangles
   for (let i = 0; i < N; i++) {
@@ -485,26 +619,34 @@ function buildCushionHybridGeo(cushionScene: THREE.Group): THREE.BufferGeometry 
   }
 
   // Index pavilion triangles
-  const pavPos: number[] = [], pavIdx: number[] = [];
+  const pavPos: number[] = [],
+    pavIdx: number[] = [];
   const eps = 1e-5;
   const vm = new Map<string, number>();
   function addV(p: THREE.Vector3): number {
-    const k = `${Math.round(p.x / eps)},${Math.round(p.y / eps)},${Math.round(p.z / eps)}`;
-    const hit = vm.get(k); if (hit !== undefined) return hit;
+    const k = `${Math.round(p.x / eps)},${Math.round(p.y / eps)},${Math.round(
+      p.z / eps
+    )}`;
+    const hit = vm.get(k);
+    if (hit !== undefined) return hit;
     const id = pavPos.length / 3;
-    pavPos.push(p.x, p.y, p.z); vm.set(k, id); return id;
+    pavPos.push(p.x, p.y, p.z);
+    vm.set(k, id);
+    return id;
   }
   for (const [a, b, c] of T) pavIdx.push(addV(a), addV(b), addV(c));
 
   // Merge crown + pavilion
   const combPos = new Float32Array(nPos.length + pavPos.length);
-  combPos.set(nPos); combPos.set(pavPos, nPos.length);
+  combPos.set(nPos);
+  combPos.set(pavPos, nPos.length);
   const combIdx = new Uint32Array(nIdx.length + pavIdx.length);
   combIdx.set(nIdx);
-  for (let i = 0; i < pavIdx.length; i++) combIdx[nIdx.length + i] = pavIdx[i] + pos.count;
+  for (let i = 0; i < pavIdx.length; i++)
+    combIdx[nIdx.length + i] = pavIdx[i] + pos.count;
 
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(combPos, 3));
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(combPos, 3));
   geo.setIndex(new THREE.BufferAttribute(combIdx, 1));
   return geo;
 }
@@ -512,23 +654,34 @@ function buildCushionHybridGeo(cushionScene: THREE.Group): THREE.BufferGeometry 
 // ── Princess hybrid: GLB crown (tail-clipped, ~12K tris) + square pavilion ──
 // Same max-radius girdle detection as cushion. Square girdle naturally produces
 // a pavilion whose 16 kite facets follow the square outline of the princess cut.
-function buildPrincessHybridGeo(princessScene: THREE.Group): THREE.BufferGeometry {
+function buildPrincessHybridGeo(
+  princessScene: THREE.Group
+): THREE.BufferGeometry {
   let crownMesh: THREE.Mesh | null = null;
   princessScene.traverse((node) => {
-    if (!crownMesh && (node as THREE.Mesh).isMesh) crownMesh = node as THREE.Mesh;
+    if (!crownMesh && (node as THREE.Mesh).isMesh)
+      crownMesh = node as THREE.Mesh;
   });
   if (!crownMesh) return new THREE.BufferGeometry();
 
   const srcGeo = (crownMesh as THREE.Mesh).geometry;
-  const pos = srcGeo.getAttribute('position') as THREE.BufferAttribute;
+  const pos = srcGeo.getAttribute("position") as THREE.BufferAttribute;
 
   // Normalize: bottom-most vertex → Y=0, max XZ radius → 1.0
-  let minY = Infinity, maxX = -Infinity, minX = Infinity, maxZ = -Infinity, minZ = Infinity;
+  let minY = Infinity,
+    maxX = -Infinity,
+    minX = Infinity,
+    maxZ = -Infinity,
+    minZ = Infinity;
   for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const x = pos.getX(i),
+      y = pos.getY(i),
+      z = pos.getZ(i);
     if (y < minY) minY = y;
-    if (x > maxX) maxX = x; if (x < minX) minX = x;
-    if (z > maxZ) maxZ = z; if (z < minZ) minZ = z;
+    if (x > maxX) maxX = x;
+    if (x < minX) minX = x;
+    if (z > maxZ) maxZ = z;
+    if (z < minZ) minZ = z;
   }
   const sc = 1.0 / (Math.max(maxX - minX, maxZ - minZ) / 2);
   const yShift = -minY * sc;
@@ -536,7 +689,7 @@ function buildPrincessHybridGeo(princessScene: THREE.Group): THREE.BufferGeometr
   const nPos = new Float32Array(pos.count * 3);
   let crownMaxY = -Infinity;
   for (let i = 0; i < pos.count; i++) {
-    nPos[i * 3]     = pos.getX(i) * sc;
+    nPos[i * 3] = pos.getX(i) * sc;
     nPos[i * 3 + 1] = pos.getY(i) * sc + yShift;
     nPos[i * 3 + 2] = pos.getZ(i) * sc;
     if (nPos[i * 3 + 1] > crownMaxY) crownMaxY = nPos[i * 3 + 1];
@@ -552,41 +705,54 @@ function buildPrincessHybridGeo(princessScene: THREE.Group): THREE.BufferGeometr
 
   // Princess pavilion: shallower depth, tighter break ring for square silhouette
   const girdleY = girdle.reduce((s, p) => s + p.y, 0) / N;
-  const pavH   = 1.05;
-  const yBreak = girdleY - pavH * 0.50;
-  const yC     = girdleY - pavH;
-  const breakR = girdle.map(p => new THREE.Vector3(p.x * 0.38, yBreak, p.z * 0.38));
-  const culet  = new THREE.Vector3(0, yC, 0);
+  const pavH = 1.05;
+  const yBreak = girdleY - pavH * 0.5;
+  const yC = girdleY - pavH;
+  const breakR = girdle.map(
+    (p) => new THREE.Vector3(p.x * 0.38, yBreak, p.z * 0.38)
+  );
+  const culet = new THREE.Vector3(0, yC, 0);
 
   type Tri = [THREE.Vector3, THREE.Vector3, THREE.Vector3];
   const T: Tri[] = [];
   for (let i = 0; i < N; i++) {
     const j = (i + 1) % N;
-    T.push([girdle[i], breakR[i], breakR[j]], [girdle[i], breakR[j], girdle[j]]);
+    T.push(
+      [girdle[i], breakR[i], breakR[j]],
+      [girdle[i], breakR[j], girdle[j]]
+    );
   }
   for (let i = 0; i < N; i++) {
     T.push([breakR[i], culet, breakR[(i + 1) % N]]);
   }
 
-  const pavPos: number[] = [], pavIdx: number[] = [];
+  const pavPos: number[] = [],
+    pavIdx: number[] = [];
   const eps = 1e-5;
   const vm = new Map<string, number>();
   function addV(p: THREE.Vector3): number {
-    const k = `${Math.round(p.x / eps)},${Math.round(p.y / eps)},${Math.round(p.z / eps)}`;
-    const hit = vm.get(k); if (hit !== undefined) return hit;
+    const k = `${Math.round(p.x / eps)},${Math.round(p.y / eps)},${Math.round(
+      p.z / eps
+    )}`;
+    const hit = vm.get(k);
+    if (hit !== undefined) return hit;
     const id = pavPos.length / 3;
-    pavPos.push(p.x, p.y, p.z); vm.set(k, id); return id;
+    pavPos.push(p.x, p.y, p.z);
+    vm.set(k, id);
+    return id;
   }
   for (const [a, b, c] of T) pavIdx.push(addV(a), addV(b), addV(c));
 
   const combPos = new Float32Array(nPos.length + pavPos.length);
-  combPos.set(nPos); combPos.set(pavPos, nPos.length);
+  combPos.set(nPos);
+  combPos.set(pavPos, nPos.length);
   const combIdx = new Uint32Array(nIdx.length + pavIdx.length);
   combIdx.set(nIdx);
-  for (let i = 0; i < pavIdx.length; i++) combIdx[nIdx.length + i] = pavIdx[i] + pos.count;
+  for (let i = 0; i < pavIdx.length; i++)
+    combIdx[nIdx.length + i] = pavIdx[i] + pos.count;
 
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(combPos, 3));
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(combPos, 3));
   geo.setIndex(new THREE.BufferAttribute(combIdx, 1));
   return geo;
 }
@@ -594,23 +760,34 @@ function buildPrincessHybridGeo(princessScene: THREE.Group): THREE.BufferGeometr
 // ── Marquise hybrid: GLB crown (X-axis-oriented) + proportionate pavilion ──
 // Remap X→Y so Y-up normalisation works, then add a shallow pavilion whose
 // break ring and depth are tuned to match the marquise's elongated outline.
-function buildMarquiseHybridGeo(marquiseScene: THREE.Group): THREE.BufferGeometry {
+function buildMarquiseHybridGeo(
+  marquiseScene: THREE.Group
+): THREE.BufferGeometry {
   let crownMesh: THREE.Mesh | null = null;
   marquiseScene.traverse((node) => {
-    if (!crownMesh && (node as THREE.Mesh).isMesh) crownMesh = node as THREE.Mesh;
+    if (!crownMesh && (node as THREE.Mesh).isMesh)
+      crownMesh = node as THREE.Mesh;
   });
   if (!crownMesh) return new THREE.BufferGeometry();
 
   const srcGeo = (crownMesh as THREE.Mesh).geometry;
-  const pos = srcGeo.getAttribute('position') as THREE.BufferAttribute;
+  const pos = srcGeo.getAttribute("position") as THREE.BufferAttribute;
 
   // Remap: old X (height) → new Y; old Y (long axis) → new X; old Z unchanged.
-  let minY = Infinity, maxX = -Infinity, minX = Infinity, maxZ = -Infinity, minZ = Infinity;
+  let minY = Infinity,
+    maxX = -Infinity,
+    minX = Infinity,
+    maxZ = -Infinity,
+    minZ = Infinity;
   for (let i = 0; i < pos.count; i++) {
-    const x = pos.getY(i), y = pos.getX(i), z = pos.getZ(i);
+    const x = pos.getY(i),
+      y = pos.getX(i),
+      z = pos.getZ(i);
     if (y < minY) minY = y;
-    if (x > maxX) maxX = x; if (x < minX) minX = x;
-    if (z > maxZ) maxZ = z; if (z < minZ) minZ = z;
+    if (x > maxX) maxX = x;
+    if (x < minX) minX = x;
+    if (z > maxZ) maxZ = z;
+    if (z < minZ) minZ = z;
   }
   const sc = 1.0 / (Math.max(maxX - minX, maxZ - minZ) / 2);
   const yShift = -minY * sc;
@@ -618,7 +795,7 @@ function buildMarquiseHybridGeo(marquiseScene: THREE.Group): THREE.BufferGeometr
   const nPos = new Float32Array(pos.count * 3);
   let crownMaxY = -Infinity;
   for (let i = 0; i < pos.count; i++) {
-    nPos[i * 3]     = pos.getY(i) * sc;
+    nPos[i * 3] = pos.getY(i) * sc;
     nPos[i * 3 + 1] = pos.getX(i) * sc + yShift;
     nPos[i * 3 + 2] = pos.getZ(i) * sc;
     if (nPos[i * 3 + 1] > crownMaxY) crownMaxY = nPos[i * 3 + 1];
@@ -633,41 +810,157 @@ function buildMarquiseHybridGeo(marquiseScene: THREE.Group): THREE.BufferGeometr
   const girdle = resampleGirdle(girdleRaw, N);
 
   const girdleY = girdle.reduce((s, p) => s + p.y, 0) / N;
-  const pavH   = 0.92;
-  const yBreak = girdleY - pavH * 0.50;
-  const yC     = girdleY - pavH;
-  const breakR = girdle.map(p => new THREE.Vector3(p.x * 0.42, yBreak, p.z * 0.42));
-  const culet  = new THREE.Vector3(0, yC, 0);
+  const pavH = 0.92;
+  const yBreak = girdleY - pavH * 0.5;
+  const yC = girdleY - pavH;
+  const breakR = girdle.map(
+    (p) => new THREE.Vector3(p.x * 0.42, yBreak, p.z * 0.42)
+  );
+  const culet = new THREE.Vector3(0, yC, 0);
 
   type Tri = [THREE.Vector3, THREE.Vector3, THREE.Vector3];
   const T: Tri[] = [];
   for (let i = 0; i < N; i++) {
     const j = (i + 1) % N;
-    T.push([girdle[i], breakR[i], breakR[j]], [girdle[i], breakR[j], girdle[j]]);
+    T.push(
+      [girdle[i], breakR[i], breakR[j]],
+      [girdle[i], breakR[j], girdle[j]]
+    );
   }
   for (let i = 0; i < N; i++) {
     T.push([breakR[i], culet, breakR[(i + 1) % N]]);
   }
 
-  const pavPos: number[] = [], pavIdx: number[] = [];
+  const pavPos: number[] = [],
+    pavIdx: number[] = [];
   const eps = 1e-5;
   const vm = new Map<string, number>();
   function addV(p: THREE.Vector3): number {
-    const k = `${Math.round(p.x / eps)},${Math.round(p.y / eps)},${Math.round(p.z / eps)}`;
-    const hit = vm.get(k); if (hit !== undefined) return hit;
+    const k = `${Math.round(p.x / eps)},${Math.round(p.y / eps)},${Math.round(
+      p.z / eps
+    )}`;
+    const hit = vm.get(k);
+    if (hit !== undefined) return hit;
     const id = pavPos.length / 3;
-    pavPos.push(p.x, p.y, p.z); vm.set(k, id); return id;
+    pavPos.push(p.x, p.y, p.z);
+    vm.set(k, id);
+    return id;
   }
   for (const [a, b, c] of T) pavIdx.push(addV(a), addV(b), addV(c));
 
   const combPos = new Float32Array(nPos.length + pavPos.length);
-  combPos.set(nPos); combPos.set(pavPos, nPos.length);
+  combPos.set(nPos);
+  combPos.set(pavPos, nPos.length);
   const combIdx = new Uint32Array(nIdx.length + pavIdx.length);
   combIdx.set(nIdx);
-  for (let i = 0; i < pavIdx.length; i++) combIdx[nIdx.length + i] = pavIdx[i] + pos.count;
+  for (let i = 0; i < pavIdx.length; i++)
+    combIdx[nIdx.length + i] = pavIdx[i] + pos.count;
 
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(combPos, 3));
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(combPos, 3));
+  geo.setIndex(new THREE.BufferAttribute(combIdx, 1));
+  return geo;
+}
+
+// ── Pear hybrid: GLB crown (X-axis height, Y-axis long) + teardrop pavilion ──
+// Same X→Y axis remap as marquise. 28 sectors faithfully trace the rounded tip
+// and the pointed culet end of the pear outline.
+function buildPearHybridGeo(pearScene: THREE.Group): THREE.BufferGeometry {
+  let crownMesh: THREE.Mesh | null = null;
+  pearScene.traverse((node) => {
+    if (!crownMesh && (node as THREE.Mesh).isMesh)
+      crownMesh = node as THREE.Mesh;
+  });
+  if (!crownMesh) return new THREE.BufferGeometry();
+
+  const srcGeo = (crownMesh as THREE.Mesh).geometry;
+  const pos = srcGeo.getAttribute("position") as THREE.BufferAttribute;
+
+  // Same remap as marquise: old X (height) → new Y; old Y (long) → new X
+  let minY = Infinity,
+    maxX = -Infinity,
+    minX = Infinity,
+    maxZ = -Infinity,
+    minZ = Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getY(i),
+      y = pos.getX(i),
+      z = pos.getZ(i);
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (x < minX) minX = x;
+    if (z > maxZ) maxZ = z;
+    if (z < minZ) minZ = z;
+  }
+  const sc = 1.0 / (Math.max(maxX - minX, maxZ - minZ) / 2);
+  const yShift = -minY * sc;
+
+  const nPos = new Float32Array(pos.count * 3);
+  let crownMaxY = -Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    nPos[i * 3] = pos.getY(i) * sc;
+    nPos[i * 3 + 1] = pos.getX(i) * sc + yShift;
+    nPos[i * 3 + 2] = pos.getZ(i) * sc;
+    if (nPos[i * 3 + 1] > crownMaxY) crownMaxY = nPos[i * 3 + 1];
+  }
+  const srcIdx = srcGeo.getIndex()!;
+  const nIdx = new Uint32Array(srcIdx.count);
+  for (let i = 0; i < srcIdx.count; i++) nIdx[i] = srcIdx.getX(i);
+
+  // 28 sectors to faithfully trace both the round tip and pointed end
+  const girdleRaw = extractGirdle(nPos, pos.count, crownMaxY);
+  const N = 28;
+  const girdle = resampleGirdle(girdleRaw, N);
+
+  const girdleY = girdle.reduce((s, p) => s + p.y, 0) / N;
+  const pavH = 0.9;
+  const yBreak = girdleY - pavH * 0.5;
+  const yC = girdleY - pavH;
+  const breakR = girdle.map(
+    (p) => new THREE.Vector3(p.x * 0.45, yBreak, p.z * 0.45)
+  );
+  const culet = new THREE.Vector3(0, yC, 0);
+
+  type Tri = [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+  const T: Tri[] = [];
+  for (let i = 0; i < N; i++) {
+    const j = (i + 1) % N;
+    T.push(
+      [girdle[i], breakR[i], breakR[j]],
+      [girdle[i], breakR[j], girdle[j]]
+    );
+  }
+  for (let i = 0; i < N; i++) {
+    T.push([breakR[i], culet, breakR[(i + 1) % N]]);
+  }
+
+  const pavPos: number[] = [],
+    pavIdx: number[] = [];
+  const eps = 1e-5;
+  const vm = new Map<string, number>();
+  function addV(p: THREE.Vector3): number {
+    const k = `${Math.round(p.x / eps)},${Math.round(p.y / eps)},${Math.round(
+      p.z / eps
+    )}`;
+    const hit = vm.get(k);
+    if (hit !== undefined) return hit;
+    const id = pavPos.length / 3;
+    pavPos.push(p.x, p.y, p.z);
+    vm.set(k, id);
+    return id;
+  }
+  for (const [a, b, c] of T) pavIdx.push(addV(a), addV(b), addV(c));
+
+  const combPos = new Float32Array(nPos.length + pavPos.length);
+  combPos.set(nPos);
+  combPos.set(pavPos, nPos.length);
+  const combIdx = new Uint32Array(nIdx.length + pavIdx.length);
+  combIdx.set(nIdx);
+  for (let i = 0; i < pavIdx.length; i++)
+    combIdx[nIdx.length + i] = pavIdx[i] + pos.count;
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(combPos, 3));
   geo.setIndex(new THREE.BufferAttribute(combIdx, 1));
   return geo;
 }
@@ -693,44 +986,34 @@ function getStoneGeo(
 function faceUpSize(geo: THREE.BufferGeometry): number {
   geo.computeBoundingBox();
   const bb = geo.boundingBox!;
-  return ((bb.max.x - bb.min.x) + (bb.max.z - bb.min.z)) / 2;
+  return (bb.max.x - bb.min.x + (bb.max.z - bb.min.z)) / 2;
 }
 
-function buildStoneGroup(
+interface StoneData {
+  geo: THREE.BufferGeometry;
+  groupScale: THREE.Vector3;
+  meshY: number;
+}
+
+function extractStoneData(
   stonesScene: THREE.Group,
   stoneKey: string,
   radius: number,
-  envIntensity: number,
-  transmission: number,
   cushionScene?: THREE.Group,
   princessScene?: THREE.Group,
   roundScene?: THREE.Group,
   marquiseScene?: THREE.Group,
-  useTripoStones = false
-): THREE.Group {
-  const isCushion  = useTripoStones && stoneKey === 'cushion';
-  const isPrincess = useTripoStones && stoneKey === 'princess';
-  const isRound    = useTripoStones && stoneKey === 'round';
-  const isMarquise = useTripoStones && stoneKey === 'marquise';
-  const isTripo    = isCushion || isPrincess || isRound || isMarquise;
+  useTripoStones = false,
+  pearScene?: THREE.Group,
+): StoneData {
+  const isCushion = useTripoStones && stoneKey === "cushion";
+  const isPrincess = useTripoStones && stoneKey === "princess";
+  const isRound = useTripoStones && stoneKey === "round";
+  const isMarquise = useTripoStones && stoneKey === "marquise";
+  const isPear = false; // uses stones.glb like oval
+  const isTripo = isCushion || isPrincess || isRound || isMarquise || isPear;
 
-  const effectiveTrans = isTripo ? 0 : transmission;
-  const mat = makeDiamondMat(isTripo ? envIntensity * 1.4 : envIntensity, effectiveTrans, stoneKey);
-  if (isTripo) {
-    mat.roughness                = 0.0;
-    mat.clearcoat                = 1.0;
-    mat.clearcoatRoughness       = 0.0;
-    mat.reflectivity             = 1.0;
-    mat.iridescence              = 0.85;
-    mat.iridescenceIOR           = 2.42;
-    mat.iridescenceThicknessRange = [100, 400];
-    mat.envMapIntensity          = envIntensity * 1.8;
-    mat.needsUpdate              = true;
-  }
-
-  // Cache key includes ':t' suffix for Tripo stones to avoid colliding with
-  // the stones.glb fallback geometry when navigating between pages.
-  const cacheKey = isTripo ? stoneKey + ':t' : stoneKey;
+  const cacheKey = isTripo ? stoneKey + ":t" : stoneKey;
   const cached = subdivGeoCache.get(cacheKey);
   let meshGeo: THREE.BufferGeometry;
 
@@ -752,49 +1035,48 @@ function buildStoneGroup(
     const g = buildMarquiseHybridGeo(marquiseScene);
     subdivGeoCache.set(cacheKey, g);
     meshGeo = g.clone();
+  } else if (isPear && pearScene) {
+    const g = buildPearHybridGeo(pearScene);
+    subdivGeoCache.set(cacheKey, g);
+    meshGeo = g.clone();
   } else {
     const meshName = STONE_MESH_NAME[stoneKey] ?? "stone_round";
     let geo = getStoneGeo(stonesScene, meshName);
-    if (!geo) stonesScene.traverse((node) => {
-      if (geo) return;
-      const m = node as THREE.Mesh;
-      if (m.isMesh) geo = m.geometry;
-    });
+    if (!geo)
+      stonesScene.traverse((node) => {
+        if (geo) return;
+        const m = node as THREE.Mesh;
+        if (m.isMesh) geo = m.geometry;
+      });
     let sg = (geo as THREE.BufferGeometry).clone();
-    sg = subdivide(sg); sg = subdivide(sg);
+    sg = subdivide(sg);
+    sg = subdivide(sg);
     subdivGeoCache.set(cacheKey, sg);
     meshGeo = sg.clone();
   }
 
-  // Match face-up diameter to pear so all stones appear the same size
+
   const pearGeo = getStoneGeo(stonesScene, "stone_pear");
-  const pearSize  = pearGeo ? faceUpSize(pearGeo) : 1;
+  const pearSize = pearGeo ? faceUpSize(pearGeo) : 1;
   const stoneSize = faceUpSize(meshGeo);
   const sizeMatch = stoneSize > 0 ? pearSize / stoneSize : 1;
 
-  const mesh = new THREE.Mesh(meshGeo, mat);
-  mesh.position.y = isMarquise ? -0.08 : 0.14;
-  const g = new THREE.Group();
-  g.add(mesh);
+  const meshY = isMarquise ? -0.08 : 0.14;
   const stoneScaleOverride = isPrincess ? 0.82 : 1.0;
   const baseScale = radius * 1.22 * sizeMatch * stoneScaleOverride;
-  if (isMarquise) {
-    g.scale.set(baseScale * 0.92, baseScale * 0.78, baseScale * 0.92);
-  } else {
-    g.scale.setScalar(baseScale);
-  }
-  return g;
-}
 
-function disposeDiamond(group: THREE.Group) {
-  group.traverse((node) => {
-    const m = node as THREE.Mesh;
-    if (m.isMesh) {
-      m.geometry.dispose();
-      if (Array.isArray(m.material)) m.material.forEach((mat) => mat.dispose());
-      else (m.material as THREE.Material).dispose();
-    }
-  });
+  const groupScale = new THREE.Vector3();
+  if (isMarquise) {
+    groupScale.set(baseScale * 0.92, baseScale * 0.78, baseScale * 0.92);
+  } else if (isCushion) {
+    groupScale.set(baseScale, baseScale * 0.82, baseScale);
+  } else if (isPrincess) {
+    groupScale.set(baseScale, baseScale * 0.82, baseScale);
+  } else {
+    groupScale.setScalar(baseScale);
+  }
+
+  return { geo: meshGeo, groupScale, meshY };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -830,19 +1112,56 @@ export function RingMesh({
   const isInitialMountRef = useRef(true);
   const { scene } = useGLTF("/models/ring-parts.glb");
   const { scene: stonesScene } = useGLTF("/models/stones.glb?v=2");
-  const { scene: cushionCrownScene }   = useGLTF("/models/cushion-crown.glb?v=5")   as { scene: THREE.Group };
-  const { scene: princessCrownScene }  = useGLTF("/models/princess-crown.glb?v=1") as { scene: THREE.Group };
-  const { scene: roundStoneScene }     = useGLTF("/models/round-stone.glb?v=1")    as { scene: THREE.Group };
-  const { scene: marquiseCrownScene }  = useGLTF("/models/marquise-crown.glb?v=2") as { scene: THREE.Group };
+  const { scene: cushionCrownScene } = useGLTF(
+    "/models/cushion-crown.glb?v=5"
+  ) as { scene: THREE.Group };
+  const { scene: princessCrownScene } = useGLTF(
+    "/models/princess-crown.glb?v=1"
+  ) as { scene: THREE.Group };
+  const { scene: roundStoneScene } = useGLTF("/models/round-stone.glb?v=1") as {
+    scene: THREE.Group;
+  };
+  const { scene: marquiseCrownScene } = useGLTF(
+    "/models/marquise-crown.glb?v=2"
+  ) as { scene: THREE.Group };
+  const { scene: pearCrownScene } = useGLTF("/models/pear-crown.glb?v=1") as {
+    scene: THREE.Group;
+  };
   const clonedScene = useRef<THREE.Group>(null!);
   if (!clonedScene.current)
     clonedScene.current = scene.clone(true) as THREE.Group;
 
-  const diamondGroupRef = useRef<THREE.Group | null>(null);
-  const diamondParentRef = useRef<THREE.Object3D | null>(null);
   const girdlePosRef = useRef<THREE.Vector3 | null>(null);
   const stoneRadiusRef = useRef<number>(0.183);
-  const stoneAnimRef = useRef<{ group: THREE.Group; target: THREE.Vector3 } | null>(null);
+  const stoneShaderUniforms = useRef<Record<string, { value: any }> | null>(null);
+
+  // Re-use the existing diamond shader (FBM micro-dents + dispersion) but with
+  // alpha transparency instead of physical transmission — facets stay visible
+  // from all angles while the body reads as thick crystal rather than chalk.
+  // Created once — never recreated on stone switch.
+  // Pattern uniforms (coarseFreq, stretch, etc.) are updated via effect below.
+  const centerStoneMat = useMemo(() => {
+    const m = makeDiamondMat(7.0, 0, stoneKey, (u) => {
+      stoneShaderUniforms.current = u;
+    });
+    // Icy grey base — diamond-appropriate diffuse, contrast comes from specular.
+    m.color.set("#c8d4e2");
+    m.iridescence = 1.0;
+    m.iridescenceIOR = 2.42;
+    m.iridescenceThicknessRange = [80, 500];
+    m.transparent = false;
+    m.opacity = 1.0;
+    m.depthWrite = true;
+    m.needsUpdate = true;
+    return m;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [stoneData, setStoneData] = useState<StoneData | null>(null);
+  const [seatPos, setSeatPos] = useState<THREE.Vector3 | null>(null);
+  const stoneJSXGroupRef = useRef<THREE.Group>(null);
+  const stoneAnimTargetRef = useRef<THREE.Vector3 | null>(null);
+  const isFirstStoneRef = useRef(true);
+  const prevStoneGeoRef = useRef<THREE.BufferGeometry | null>(null);
 
   const config = METAL_CONFIGS[metalKey] ?? METAL_CONFIGS["14k-yellow"];
 
@@ -875,13 +1194,24 @@ export function RingMesh({
     });
     bandMaterialRef.current = bandMat;
 
-    const accentMat = makeDiamondMat(
-      stoneEnvIntensity * 1.5,
-      stoneTransmission
-    );
-    accentMat.iridescence = 0.9;
-    accentMat.iridescenceIOR = 2.5;
-    accentMat.needsUpdate = true;
+    // Accent stones (side band diamonds) use a plain MeshPhysicalMaterial —
+    // no Voronoi/FBM shader. At their small scale the detail is invisible,
+    // and running the heavy custom shader on 20-30 meshes every frame tanks perf.
+    const accentMat = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color("#c8d4e2"),
+      roughness: 0.0,
+      metalness: 0.0,
+      envMapIntensity: stoneEnvIntensity * 1.5,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.0,
+      reflectivity: 1.0,
+      specularIntensity: 1.0,
+      iridescence: 0.9,
+      iridescenceIOR: 2.5,
+      iridescenceThicknessRange: [80, 400],
+      flatShading: true,
+      side: THREE.DoubleSide,
+    });
 
     // ── Pass 1: Find the prong basket + collect all mesh data ────────
     // The prong basket is the largest-tri mesh at positive Y near the ring axis.
@@ -1038,30 +1368,34 @@ export function RingMesh({
       m.parent?.remove(m);
     });
 
-    // ── Place center diamond ──────────────────────────────────────
-    const diamond = buildStoneGroup(
-      stonesScene,
-      stoneKey,
-      seatRadius,
-      stoneEnvIntensity,
-      stoneTransmission,
-      cushionCrownScene,
-      princessCrownScene,
-      roundStoneScene,
-      marquiseCrownScene,
-      useTripoStones
+    // ── Extract center stone data for JSX rendering ───────────────
+    const data = extractStoneData(
+      stonesScene, stoneKey, seatRadius,
+      cushionCrownScene, princessCrownScene, roundStoneScene,
+      marquiseCrownScene, useTripoStones, pearCrownScene,
     );
-    diamond.position.copy(seatCenter);
-    const parent = clonedScene.current;
-    parent.add(diamond);
-    diamondGroupRef.current = diamond;
-    diamondParentRef.current = parent;
+    prevStoneGeoRef.current = data.geo;
+    setStoneData(data);
+    setSeatPos(seatCenter.clone());
   }, []);
 
   // ── Signal ready ─────────────────────────────────────────────────
   useEffect(() => {
     onReady?.();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Update stone shader pattern on switch (no recompile) ─────────
+  useEffect(() => {
+    const u = stoneShaderUniforms.current;
+    if (!u) return;
+    const pat = STONE_PATTERNS[stoneKey] ?? STONE_PATTERNS.round;
+    u.uStretchAxis.value.set(pat.axis[0], pat.axis[1], pat.axis[2]);
+    u.uStretch.value = pat.stretch;
+    u.uGrid.value = pat.grid;
+    u.uCoarseFreq.value = pat.coarseFreq;
+    u.uFineFreq.value = pat.fineFreq;
+    u.uDentStrength.value = pat.dentStrength ?? 1.0;
+  }, [stoneKey]);
 
   // ── Stone switching ───────────────────────────────────────────────
   useEffect(() => {
@@ -1070,36 +1404,29 @@ export function RingMesh({
       return;
     }
 
-    const parent = diamondParentRef.current;
-    const pos = girdlePosRef.current;
-    if (!parent || !pos) return;
-
-    if (diamondGroupRef.current) {
-      parent.remove(diamondGroupRef.current);
-      disposeDiamond(diamondGroupRef.current);
-      diamondGroupRef.current = null;
-    }
-
     const r = stoneRadiusRef.current;
-    const diamond = buildStoneGroup(
-      stonesScene,
-      stoneKey,
-      r,
-      stoneEnvIntensity,
-      stoneTransmission,
-      cushionCrownScene,
-      princessCrownScene,
-      roundStoneScene,
-      marquiseCrownScene,
-      useTripoStones
+    prevStoneGeoRef.current?.dispose();
+
+    const data = extractStoneData(
+      stonesScene, stoneKey, r,
+      cushionCrownScene, princessCrownScene, roundStoneScene,
+      marquiseCrownScene, useTripoStones, pearCrownScene,
     );
-    diamond.position.copy(pos);
-    const targetScale = diamond.scale.clone();
-    diamond.scale.setScalar(0.001);
-    parent.add(diamond);
-    diamondGroupRef.current = diamond;
-    stoneAnimRef.current = { group: diamond, target: targetScale };
+    prevStoneGeoRef.current = data.geo;
+    setStoneData(data);
   }, [stoneKey]);
+
+  // ── Reset stone scale for switch animation ────────────────────────
+  useLayoutEffect(() => {
+    if (!stoneJSXGroupRef.current || !stoneData) return;
+    if (isFirstStoneRef.current) {
+      isFirstStoneRef.current = false;
+      stoneJSXGroupRef.current.scale.copy(stoneData.groupScale);
+      return;
+    }
+    stoneJSXGroupRef.current.scale.setScalar(0.001);
+    stoneAnimTargetRef.current = stoneData.groupScale.clone();
+  }, [stoneData]);
 
   // ── Rotation + mouse ──────────────────────────────────────────────
   useFrame(({ clock }, delta) => {
@@ -1107,12 +1434,14 @@ export function RingMesh({
     if (!group) return;
     const d = Math.min(delta, 0.04);
 
-    if (stoneAnimRef.current) {
-      const { group: sg, target } = stoneAnimRef.current;
-      sg.scale.lerp(target, 0.10);
-      if (sg.scale.distanceTo(target) < 0.002) {
-        sg.scale.copy(target);
-        stoneAnimRef.current = null;
+    if (stoneShaderUniforms.current)
+      stoneShaderUniforms.current.uTime.value = clock.getElapsedTime();
+
+    if (stoneJSXGroupRef.current && stoneAnimTargetRef.current) {
+      stoneJSXGroupRef.current.scale.lerp(stoneAnimTargetRef.current, 0.1);
+      if (stoneJSXGroupRef.current.scale.distanceTo(stoneAnimTargetRef.current) < 0.002) {
+        stoneJSXGroupRef.current.scale.copy(stoneAnimTargetRef.current);
+        stoneAnimTargetRef.current = null;
       }
     }
 
@@ -1168,11 +1497,19 @@ export function RingMesh({
           />
           <pointLight position={[0, -2, 2]} intensity={10} color="#ffffff" />
           <pointLight position={[0, -1, -4]} intensity={8} color="#ffffff" />
+          <pointLight position={[0, 0.06, 0]} intensity={22} color="#fff8f0" distance={1.2} />
         </>
       )}
 
       <group ref={groupRef}>
         <primitive object={clonedScene.current} scale={1.8} />
+        {stoneData && seatPos && (
+          <group scale={1.8}>
+            <group ref={stoneJSXGroupRef} position={seatPos}>
+              <mesh geometry={stoneData.geo} position-y={stoneData.meshY} material={centerStoneMat} />
+            </group>
+          </group>
+        )}
       </group>
     </>
   );
