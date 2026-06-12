@@ -9,7 +9,7 @@ import { METAL_CONFIGS } from "@/lib/materials";
 
 useGLTF.preload("/models/ring-parts.glb");
 useGLTF.preload("/models/stones.glb?v=2");
-useGLTF.preload("/models/cushion-crown.glb?v=3");
+useGLTF.preload("/models/cushion-crown.glb?v=4");
 useGLTF.preload("/models/princess-crown.glb?v=1");
 useGLTF.preload("/models/round-stone.glb?v=1");
 useGLTF.preload("/models/marquise-crown.glb?v=1");
@@ -830,7 +830,7 @@ export function RingMesh({
   const isInitialMountRef = useRef(true);
   const { scene } = useGLTF("/models/ring-parts.glb");
   const { scene: stonesScene } = useGLTF("/models/stones.glb?v=2");
-  const { scene: cushionCrownScene }   = useGLTF("/models/cushion-crown.glb?v=3")    as { scene: THREE.Group };
+  const { scene: cushionCrownScene }   = useGLTF("/models/cushion-crown.glb?v=4")    as { scene: THREE.Group };
   const { scene: princessCrownScene }  = useGLTF("/models/princess-crown.glb?v=1")  as { scene: THREE.Group };
   const { scene: roundStoneScene }     = useGLTF("/models/round-stone.glb?v=1")     as { scene: THREE.Group };
   const { scene: marquiseCrownScene }  = useGLTF("/models/marquise-crown.glb?v=1")  as { scene: THREE.Group };
@@ -842,6 +842,7 @@ export function RingMesh({
   const diamondParentRef = useRef<THREE.Object3D | null>(null);
   const girdlePosRef = useRef<THREE.Vector3 | null>(null);
   const stoneRadiusRef = useRef<number>(0.183);
+  const stoneAnimRef = useRef<{ group: THREE.Group; target: THREE.Vector3 } | null>(null);
 
   const config = METAL_CONFIGS[metalKey] ?? METAL_CONFIGS["14k-yellow"];
 
@@ -1093,8 +1094,11 @@ export function RingMesh({
       useTripoStones
     );
     diamond.position.copy(pos);
+    const targetScale = diamond.scale.clone();
+    diamond.scale.setScalar(0.001);
     parent.add(diamond);
     diamondGroupRef.current = diamond;
+    stoneAnimRef.current = { group: diamond, target: targetScale };
   }, [stoneKey]);
 
   // ── Rotation + mouse ──────────────────────────────────────────────
@@ -1102,6 +1106,15 @@ export function RingMesh({
     const group = groupRef.current;
     if (!group) return;
     const d = Math.min(delta, 0.04);
+
+    if (stoneAnimRef.current) {
+      const { group: sg, target } = stoneAnimRef.current;
+      sg.scale.lerp(target, 0.10);
+      if (sg.scale.distanceTo(target) < 0.002) {
+        sg.scale.copy(target);
+        stoneAnimRef.current = null;
+      }
+    }
 
     if (autoRotate) {
       const t = clock.getElapsedTime();
