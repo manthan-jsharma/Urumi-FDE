@@ -1091,6 +1091,7 @@ interface RingMeshProps {
   mouseRef?: MutableRefObject<{ x: number; y: number }>;
   onReady?: () => void;
   showLights?: boolean;
+  culetLight?: boolean;
   useTripoStones?: boolean;
 }
 
@@ -1104,6 +1105,7 @@ export function RingMesh({
   mouseRef,
   onReady,
   showLights = true,
+  culetLight = false,
   useTripoStones = false,
 }: RingMeshProps) {
   const groupRef = useRef<THREE.Group>(null);
@@ -1497,10 +1499,12 @@ export function RingMesh({
           />
           <pointLight position={[0, -2, 2]} intensity={10} color="#ffffff" />
           <pointLight position={[0, -1, -4]} intensity={8} color="#ffffff" />
-          <pointLight position={[0, 0.06, 0]} intensity={22} color="#fff8f0" distance={1.2} />
         </>
       )}
 
+      {culetLight && (
+        <pointLight position={[0, 0.06, 0]} intensity={22} color="#fff8f0" distance={1.2} />
+      )}
       <group ref={groupRef}>
         <primitive object={clonedScene.current} scale={1.8} />
         {stoneData && seatPos && (
