@@ -7,12 +7,14 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { METAL_CONFIGS } from "@/lib/materials";
 
+const CDN = "https://cdn.jsdelivr.net/gh/manthan-jsharma/Urumi-FDE@main/aurelia/apps/web/public/models";
+
 useGLTF.preload("/models/ring-parts.glb");
 useGLTF.preload("/models/stones.glb?v=2");
-useGLTF.preload("/models/cushion-crown.glb?v=4");
-useGLTF.preload("/models/princess-crown.glb?v=1");
-useGLTF.preload("/models/round-stone.glb?v=1");
-useGLTF.preload("/models/marquise-crown.glb?v=1");
+useGLTF.preload(`${CDN}/cushion-crown.glb`);
+useGLTF.preload(`${CDN}/princess-crown.glb`);
+useGLTF.preload(`${CDN}/round-stone.glb`);
+useGLTF.preload(`${CDN}/marquise-crown.glb`);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Diamond material — flatShading gives each facet its own normal, producing the
@@ -830,10 +832,10 @@ export function RingMesh({
   const isInitialMountRef = useRef(true);
   const { scene } = useGLTF("/models/ring-parts.glb");
   const { scene: stonesScene } = useGLTF("/models/stones.glb?v=2");
-  const { scene: cushionCrownScene }   = useGLTF("/models/cushion-crown.glb?v=4")    as { scene: THREE.Group };
-  const { scene: princessCrownScene }  = useGLTF("/models/princess-crown.glb?v=1")  as { scene: THREE.Group };
-  const { scene: roundStoneScene }     = useGLTF("/models/round-stone.glb?v=1")     as { scene: THREE.Group };
-  const { scene: marquiseCrownScene }  = useGLTF("/models/marquise-crown.glb?v=1")  as { scene: THREE.Group };
+  const { scene: cushionCrownScene }   = useGLTF(`${CDN}/cushion-crown.glb`)    as { scene: THREE.Group };
+  const { scene: princessCrownScene }  = useGLTF(`${CDN}/princess-crown.glb`)  as { scene: THREE.Group };
+  const { scene: roundStoneScene }     = useGLTF(`${CDN}/round-stone.glb`)     as { scene: THREE.Group };
+  const { scene: marquiseCrownScene }  = useGLTF(`${CDN}/marquise-crown.glb`)  as { scene: THREE.Group };
   const clonedScene = useRef<THREE.Group>(null!);
   if (!clonedScene.current)
     clonedScene.current = scene.clone(true) as THREE.Group;
