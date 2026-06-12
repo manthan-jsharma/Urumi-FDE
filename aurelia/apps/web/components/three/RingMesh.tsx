@@ -1033,10 +1033,6 @@ function extractStoneData(
     const g = buildMarquiseHybridGeo(marquiseScene);
     subdivGeoCache.set(cacheKey, g);
     meshGeo = g.clone();
-  } else if (isPear && pearScene) {
-    const g = buildPearHybridGeo(pearScene);
-    subdivGeoCache.set(cacheKey, g);
-    meshGeo = g.clone();
   } else {
     const meshName = STONE_MESH_NAME[stoneKey] ?? "stone_round";
     let geo = getStoneGeo(stonesScene, meshName);
