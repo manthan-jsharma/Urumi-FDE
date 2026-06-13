@@ -74,7 +74,7 @@ function RingScene({ onReady }: { onReady: () => void }) {
         <LightTentEnvironment delay={600} />
         <spotLight position={[5, 8, 3]} intensity={2.5} angle={0.35} penumbra={0.8} castShadow shadow-mapSize={[256, 256]} />
         <ambientLight intensity={0.12} />
-        <RingMesh metalKey={metal} stoneKey={stone} autoRotate={!userInteracting} onReady={onReady} stoneTransmission={0.72} useTripoStones culetLight />
+        <RingMesh metalKey={metal} stoneKey={stone} autoRotate={!userInteracting} onReady={onReady} stoneTransmission={0.72} useTripoStones culetLight heavyShader />
         <Pedestal />
         <ContactShadows position={[0, -0.92, 0]} opacity={0.5} scale={2.8} blur={2} far={1.0} frames={1} />
         <FloatingCallout metal={metal} stone={stone} visible={showCallout} />

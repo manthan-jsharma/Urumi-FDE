@@ -277,7 +277,8 @@ function makeDiamondMat(
   envIntensity = 5.5,
   transmission = 0,
   stoneKey = "round",
-  onShaderReady?: (uniforms: Record<string, { value: any }>) => void
+  onShaderReady?: (uniforms: Record<string, { value: any }>) => void,
+  simple = false
 ): THREE.MeshPhysicalMaterial {
   const hasTransmission = transmission > 0;
   const mat = new THREE.MeshPhysicalMaterial({
@@ -302,43 +303,44 @@ function makeDiamondMat(
     side: THREE.DoubleSide,
   });
 
-  mat.onBeforeCompile = (shader) => {
-    const pat = STONE_PATTERNS[stoneKey] ?? STONE_PATTERNS.round;
-    shader.uniforms.uStretchAxis = {
-      value: new THREE.Vector3(pat.axis[0], pat.axis[1], pat.axis[2]),
-    };
-    shader.uniforms.uStretch = { value: pat.stretch };
-    shader.uniforms.uGrid = { value: pat.grid };
-    shader.uniforms.uCoarseFreq = { value: pat.coarseFreq };
-    shader.uniforms.uFineFreq = { value: pat.fineFreq };
-    shader.uniforms.uDentStrength = { value: pat.dentStrength ?? 1.0 };
-    shader.uniforms.uTime = { value: 0 };
-    onShaderReady?.(shader.uniforms);
+  if (!simple) {
+    mat.onBeforeCompile = (shader) => {
+      const pat = STONE_PATTERNS[stoneKey] ?? STONE_PATTERNS.round;
+      shader.uniforms.uStretchAxis = {
+        value: new THREE.Vector3(pat.axis[0], pat.axis[1], pat.axis[2]),
+      };
+      shader.uniforms.uStretch = { value: pat.stretch };
+      shader.uniforms.uGrid = { value: pat.grid };
+      shader.uniforms.uCoarseFreq = { value: pat.coarseFreq };
+      shader.uniforms.uFineFreq = { value: pat.fineFreq };
+      shader.uniforms.uDentStrength = { value: pat.dentStrength ?? 1.0 };
+      shader.uniforms.uTime = { value: 0 };
+      onShaderReady?.(shader.uniforms);
 
-    shader.vertexShader = shader.vertexShader.replace(
-      "void main() {",
-      `varying vec3 vObjectPos;\nvoid main() {`
-    );
-    shader.vertexShader = shader.vertexShader.replace(
-      "#include <begin_vertex>",
-      `#include <begin_vertex>\nvObjectPos = position;`
-    );
+      shader.vertexShader = shader.vertexShader.replace(
+        "void main() {",
+        `varying vec3 vObjectPos;\nvoid main() {`
+      );
+      shader.vertexShader = shader.vertexShader.replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>\nvObjectPos = position;`
+      );
 
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "void main() {",
-      `${DENTS_PREAMBLE_GLSL}\nvoid main() {`
-    );
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <transmission_fragment>",
-      DISPERSION_TRANSMISSION_GLSL
-    );
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <normal_fragment_maps>",
-      `#include <normal_fragment_maps>\n${MICRO_DENTS_GLSL}`
-    );
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <output_fragment>",
-      `// Warm fire for depth/grazing facets — face-on facets are pure specular white
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "void main() {",
+        `${DENTS_PREAMBLE_GLSL}\nvoid main() {`
+      );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <transmission_fragment>",
+        DISPERSION_TRANSMISSION_GLSL
+      );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <normal_fragment_maps>",
+        `#include <normal_fragment_maps>\n${MICRO_DENTS_GLSL}`
+      );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <output_fragment>",
+        `// Warm fire for depth/grazing facets — face-on facets are pure specular white
 vec3 _vd  = normalize( -vViewPosition );
 float _fd = pow( 1.0 - max( dot( normal, _vd ), 0.0 ), 2.5 );
 outgoingLight += vec3( 1.0, 0.72, 0.30 ) * _fd * 0.35;
@@ -350,10 +352,11 @@ vec3  _disp = 0.5 + 0.5 * cos( 6.28318 * ( _rhue + vec3( 0.0, 0.333, 0.667 ) ) )
 outgoingLight += _disp * _fd * 0.70;
 
 #include <output_fragment>`
-    );
-  };
-  // All diamond materials share one compiled program — stable cache key
-  mat.customProgramCacheKey = () => "diamond-v3";
+      );
+    };
+    // All heavy diamond materials share one compiled program — stable cache key
+    mat.customProgramCacheKey = () => "diamond-v3";
+  }
 
   return mat;
 }
@@ -1087,6 +1090,8 @@ interface RingMeshProps {
   showLights?: boolean;
   culetLight?: boolean;
   useTripoStones?: boolean;
+  /** Enable the expensive FBM+Voronoi facet shader. Configurator only — keep false everywhere else. */
+  heavyShader?: boolean;
 }
 
 export function RingMesh({
@@ -1101,6 +1106,7 @@ export function RingMesh({
   showLights = true,
   culetLight = false,
   useTripoStones = false,
+  heavyShader = false,
 }: RingMeshProps) {
   const groupRef = useRef<THREE.Group>(null);
   const bandMaterialRef = useRef<THREE.MeshPhysicalMaterial | null>(null);
@@ -1134,9 +1140,11 @@ export function RingMesh({
   // Created once — never recreated on stone switch.
   // Pattern uniforms (coarseFreq, stretch, etc.) are updated via effect below.
   const centerStoneMat = useMemo(() => {
-    const m = makeDiamondMat(7.0, 0, stoneKey, (u) => {
-      stoneShaderUniforms.current = u;
-    });
+    const m = makeDiamondMat(
+      7.0, 0, stoneKey,
+      heavyShader ? (u) => { stoneShaderUniforms.current = u; } : undefined,
+      !heavyShader
+    );
     // Icy grey base — diamond-appropriate diffuse, contrast comes from specular.
     m.color.set("#c8d4e2");
     m.iridescence = 1.0;
