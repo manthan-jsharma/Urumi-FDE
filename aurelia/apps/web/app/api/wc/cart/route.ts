@@ -10,21 +10,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true })
   }
 
-  const res = await fetch(`${WC_URL}/wp-json/cocart/v2/cart/add-item`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      id: PRODUCT_ID,
-      quantity: '1',
-      cart_item_data: body.cart_item_data,
-    }),
-  })
+  try {
+    const res = await fetch(`${WC_URL}/wp-json/cocart/v2/cart/add-item`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: PRODUCT_ID,
+        quantity: '1',
+        cart_item_data: body.cart_item_data,
+      }),
+    })
 
-  if (!res.ok) {
-    // CoCart unavailable — still return success so cart works for demo
+    if (!res.ok) {
+      return NextResponse.json({ success: true })
+    }
+
+    const data = await res.json()
+    return NextResponse.json({ success: true, cart_key: data.cart_key })
+  } catch {
+    // CoCart unreachable — return success so demo cart flow works
     return NextResponse.json({ success: true })
   }
-
-  const data = await res.json()
-  return NextResponse.json({ success: true, cart_key: data.cart_key })
 }
